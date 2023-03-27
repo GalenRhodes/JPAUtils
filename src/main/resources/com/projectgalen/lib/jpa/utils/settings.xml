@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <!-- # -->
+    <entry key="pgbudget.dao.dup_key_regexp">Duplicate entry '([^']+)' for key '(\w+).(\w+)'</entry>
+    <entry key="pgbudget.dao.get_from">from %s e</entry>
+    <entry key="pgbudget.dao.get_unique">from %s e where e.%s = :%s</entry>
+    <entry key="pgbudget.dao.value_key">VAL</entry>
+    <!-- # -->
+</properties>

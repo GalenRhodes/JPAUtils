@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <!-- # -->
+    <entry key="msg.err.dao.instantiation">Instantiation Exception</entry>
+    <entry key="msg.err.not_supported">%s not supported.</entry>
+    <entry key="msg.err.unknown">Unknown Error</entry>
+    <!-- # -->
+</properties>
