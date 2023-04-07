@@ -44,7 +44,7 @@ import java.util.regex.Pattern;
 @SuppressWarnings({ "UnusedReturnValue", "unused" })
 public abstract class AbstractDao<T extends JpaBase> {
 
-    protected static final PGProperties     props = PGProperties.getXMLProperties("settings.properties", HibernateUtil.class);
+    protected static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
     protected static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
 
     protected final Class<T> entityClass;
