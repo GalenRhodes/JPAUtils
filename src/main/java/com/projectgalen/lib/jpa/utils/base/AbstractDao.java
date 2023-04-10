@@ -31,6 +31,7 @@ import com.projectgalen.lib.utils.PGResourceBundle;
 import jakarta.persistence.PersistenceException;
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
+import org.hibernate.Transaction;
 import org.hibernate.exception.ConstraintViolationException;
 import org.hibernate.query.Query;
 import org.jetbrains.annotations.NotNull;
@@ -61,6 +62,20 @@ public abstract class AbstractDao<T extends JpaBase> {
         return getEntityClass().getSimpleName();
     }
 
+    public @NotNull T getNewEntity() {
+        try {
+            try {
+                return entityClass.getConstructor(boolean.class).newInstance(false);
+            }
+            catch(Exception e) {
+                return entityClass.getConstructor().newInstance();
+            }
+        }
+        catch(Exception e) {
+            throw new DaoException(msgs.format("msg.err.dao.new_instance_failure", getEntityName()), e);
+        }
+    }
+
     /**
      * Synonym for update(entity).
      *
@@ -78,10 +93,10 @@ public abstract class AbstractDao<T extends JpaBase> {
     }
 
     public @NotNull List<T> findAll() {
-        List<T> results = withSessionDo(session -> session.createQuery(props.format("pgbudget.dao.get_from", getEntityName()), getEntityClass()).list());
-        if(results == null) return Collections.emptyList();
-        for(T o : results) o.setJpaState(JpaState.NORMAL);
-        return results;
+        try(Session session = HibernateUtil.getSessionFactory().openSession()) {
+            List<T> results = session.createQuery(props.format("pgbudget.dao.get_from", getEntityName()), getEntityClass()).list();
+            return ((results == null) ? Collections.emptyList() : results);
+        }
     }
 
     public T get(@NotNull Long id) {
@@ -93,47 +108,41 @@ public abstract class AbstractDao<T extends JpaBase> {
     }
 
     public T get(@NotNull String searchField, @NotNull Object searchValue) {
-        return withSessionDo(session -> {
+        try(Session session = HibernateUtil.getSessionFactory().openSession()) {
             String   valueKey = props.getProperty("pgbudget.dao.value_key");
             Query<T> query    = session.createQuery(props.format("pgbudget.dao.get_unique", getEntityName(), searchField, valueKey), getEntityClass());
-
             query.setParameter(valueKey, searchValue);
-
             T result = query.uniqueResult();
-
             Hibernate.initialize(result);
-            result.setJpaState(JpaState.NORMAL);
             return result;
-        });
-    }
-
-    public @NotNull T newInstance() {
-        try {
-            try {
-                return entityClass.getConstructor(boolean.class).newInstance(false);
-            }
-            catch(Exception e) {
-                return entityClass.getConstructor().newInstance();
-            }
-        }
-        catch(Exception e) {
-            throw new DaoException(msgs.getString("msg.err.dao.instantiation"), e);
         }
     }
 
     public void update(@NotNull T entity) {
-        switch(entity.getJpaState()) {
-            case NEW:
-            case DELETED:
-                withSessionDo(session -> q(() -> session.persist(entity)));
-                entity.setJpaState(JpaState.NORMAL);
-                break;
-            case DIRTY:
-                withSessionDo(session -> session.merge(entity));
-                entity.setJpaState(JpaState.NORMAL);
-                break;
-            default:
-                break;
+        try(Session session = HibernateUtil.getSessionFactory().openSession()) {
+            Transaction transaction = session.beginTransaction();
+            try {
+                switch(entity.getJpaState()) {
+                    case NEW:
+                    case DELETED:
+                        session.persist(entity);
+                        entity.setJpaState(JpaState.NORMAL);
+                        break;
+                    case DIRTY:
+                        session.merge(entity);
+                        entity.setJpaState(JpaState.NORMAL);
+                        break;
+                    default:
+                        break;
+                }
+                session.flush();
+                transaction.commit();
+                session.refresh(entity);
+            }
+            catch(Exception e) {
+                handleUpdateException(transaction, e);
+                throw e;
+            }
         }
     }
 
@@ -149,25 +158,26 @@ public abstract class AbstractDao<T extends JpaBase> {
 
     protected <R> R withSessionDo(@NotNull SessionAction<R> delegate) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
+            Transaction transaction = session.beginTransaction();
             try {
-                session.beginTransaction();
                 R r = delegate.action(session);
-                session.getTransaction().commit();
+                session.flush();
+                transaction.commit();
                 return r;
             }
             catch(Exception e) {
-                session.getTransaction().rollback();
-                if(isConstraintViolation(e)) {
-                    Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
-                    if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
-                }
+                handleUpdateException(transaction, e);
                 throw e;
             }
         }
     }
 
-    private static boolean isConstraintViolation(@NotNull Exception e) {
-        return ((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException));
+    private static void handleUpdateException(Transaction transaction, Exception e) {
+        if(transaction != null) transaction.rollback();
+        if(((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException))) {
+            Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
+            if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
+        }
     }
 
     protected interface QDelegate {

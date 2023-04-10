@@ -21,6 +21,8 @@ package com.projectgalen.lib.jpa.utils.annotations;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
+import com.projectgalen.lib.jpa.utils.base.AbstractDao;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -28,4 +30,6 @@ import java.lang.annotation.Target;
 
 @Target({ ElementType.TYPE })
 @Retention(RetentionPolicy.RUNTIME)
-public @interface PGJPA { }
+public @interface PGJPA {
+    Class<? extends AbstractDao<?>> daoClass();
+}

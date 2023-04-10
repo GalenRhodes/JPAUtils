@@ -22,7 +22,6 @@ package com.projectgalen.lib.jpa.utils.base;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.annotations.PGJPA;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import jakarta.persistence.Column;
 import org.jetbrains.annotations.NotNull;
@@ -34,17 +33,16 @@ import java.util.Objects;
 import java.util.TreeMap;
 
 @SuppressWarnings("unused")
-@PGJPA
 public class JpaBase {
 
     protected JpaState jpaState;
 
     public JpaBase() {
-        jpaState = JpaState.NEW;
+        jpaState = JpaState.NORMAL;
     }
 
     public JpaBase(boolean dummy) {
-        jpaState = JpaState.NORMAL;
+        jpaState = (dummy ? JpaState.NORMAL : JpaState.NEW);
     }
 
     public @Override boolean equals(@Nullable Object o) {
@@ -103,8 +101,8 @@ public class JpaBase {
         return (jpaState == JpaState.NEW);
     }
 
-    protected void setAsDirty() {
-        if(isNormal()) jpaState = JpaState.DIRTY;
+    public void setJpaState(@NotNull JpaState jpaState) {
+        this.jpaState = jpaState;
     }
 
     protected @NotNull Map<String, Field> getComparableFields() {
@@ -123,7 +121,7 @@ public class JpaBase {
         return fields;
     }
 
-    protected void setJpaState(@NotNull JpaState jpaState) {
-        this.jpaState = jpaState;
+    public void setAsDirty() {
+        if(isNormal()) jpaState = JpaState.DIRTY;
     }
 }
