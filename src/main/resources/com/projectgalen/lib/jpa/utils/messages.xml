@@ -3,6 +3,7 @@
 <properties>
     <!-- # -->
     <entry key="msg.err.dao.new_instance_failure">Unable to create a new instance of %s.</entry>
+    <entry key="msg.err.fields_values_count_mismatch">Number of searchFields and searchValues does not match. %d != %d</entry>
     <entry key="msg.err.not_supported">%s not supported.</entry>
     <entry key="msg.err.unknown">Unknown Error</entry>
     <!-- # -->
