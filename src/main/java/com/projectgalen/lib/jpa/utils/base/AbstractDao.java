@@ -46,12 +46,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @SuppressWarnings({ "UnusedReturnValue", "unused", "SameParameterValue" })
-public abstract class AbstractDao<T extends JpaBase> {
+public class AbstractDao<T extends JpaBase> {
 
-    protected static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
-    protected static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
+    private static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
+    private static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
 
-    protected final Class<T> entityClass;
+    private final Class<T> entityClass;
 
     public AbstractDao(@NotNull Class<T> entityClass) {
         this.entityClass = entityClass;
@@ -65,44 +65,70 @@ public abstract class AbstractDao<T extends JpaBase> {
         return getEntityClass().getSimpleName();
     }
 
+    public @NotNull T getNewEntity() {
+        try {
+            try {
+                return entityClass.getConstructor(boolean.class).newInstance(false);
+            }
+            catch(Exception e) {
+                return entityClass.getConstructor().newInstance();
+            }
+        }
+        catch(Exception e) {
+            throw new DaoException(msgs.format("msg.err.dao.new_instance_failure", getEntityName()), e);
+        }
+    }
+
     /**
      * Synonym for update(entity).
      *
      * @param entity The entity to insert into the database
      * @param deep   If true it will also attempt to create/update any child objects as well.
      */
-    protected void _create(@NotNull T entity, boolean deep) {
-        _update(entity, deep);
+    public void create(@NotNull T entity, boolean deep) {
+        update(entity, deep);
     }
 
-    protected void _delete(@NotNull T entity) {
+    public void create(@NotNull T entity) {
+        update(entity, true);
+    }
+
+    public void delete(@NotNull T entity) {
         if(!entity.isNew()) {
             try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-                _withTransaction(session, s -> s.remove(entity));
+                withTransaction(session, s -> s.remove(entity));
                 entity.setJpaState(JpaState.DELETED);
             }
         }
     }
 
-    protected @NotNull List<T> _find(@NotNull String queryString, @Nullable Map<String, Object> parameters, boolean initializeResults) {
-        @NotNull List<T> list = Objects.requireNonNull(_findWithAction(queryString, parameters, q -> notNullResults(q.list())));
+    public @NotNull List<T> find(@NotNull String queryString, @Nullable Map<String, Object> parameters) {
+        return find(queryString, parameters, true);
+    }
+
+    public @NotNull List<T> find(@NotNull String queryString, @Nullable Map<String, Object> parameters, boolean initializeResults) {
+        @NotNull List<T> list = Objects.requireNonNull(findWithAction(queryString, parameters, q -> notNullResults(q.list())));
         if(initializeResults) for(T entity : list) Hibernate.initialize(entity);
         return list;
     }
 
-    protected @NotNull List<T> _findAll(boolean initializeResults) {
-        return _find(String.format("from %s e", getEntityName()), null, initializeResults);
+    public @NotNull List<T> findAll() {
+        return findAll(true);
+    }
+    
+    public @NotNull List<T> findAll(boolean initializeResults) {
+        return find(String.format("from %s e", getEntityName()), null, initializeResults);
     }
 
-    protected <R> @Nullable R _findWithAction(@NotNull String queryString, @Nullable Map<String, Object> parameters, @NotNull QueryAction<T, R> queryAction) {
-        return _withSessionGet(session -> {
+    public <R> @Nullable R findWithAction(@NotNull String queryString, @Nullable Map<String, Object> parameters, @NotNull QueryAction<T, R> queryAction) {
+        return withSessionGet(session -> {
             Query<T> query = session.createQuery(queryString, getEntityClass());
             if(parameters != null) for(Map.Entry<String, Object> entry : parameters.entrySet()) query.setParameter(entry.getKey(), entry.getValue());
             return queryAction.action(query);
         });
     }
 
-    protected @Nullable T _get(String @NotNull [] searchFields, Object @NotNull [] searchValues) {
+    public @Nullable T get(String @NotNull [] searchFields, Object @NotNull [] searchValues) {
         if(searchFields.length != searchValues.length) throw new IllegalArgumentException(msgs.format("msg.err.fields_values_count_mismatch", searchFields.length, searchValues.length));
 
         Map<String, Object> params = new LinkedHashMap<>();
@@ -117,58 +143,69 @@ public abstract class AbstractDao<T extends JpaBase> {
             params.put(key, searchValues[i]);
         }
 
-        return _findWithAction(sb.toString(), params, q -> init(q.uniqueResult()));
+        return findWithAction(sb.toString(), params, q -> init(q.uniqueResult()));
     }
 
-    protected @Nullable T _get(@NotNull String searchField, @NotNull Object searchValue) {
-        return _get(U.asArray(searchField), U.asArray(searchValue));
+    public @Nullable T get(@NotNull String searchField, @NotNull Object searchValue) {
+        return get(U.asArray(searchField), U.asArray(searchValue));
     }
 
-    protected @NotNull T _getNewEntity() {
-        try {
-            try {
-                return entityClass.getConstructor(boolean.class).newInstance(false);
-            }
-            catch(Exception e) {
-                return entityClass.getConstructor().newInstance();
-            }
-        }
-        catch(Exception e) {
-            throw new DaoException(msgs.format("msg.err.dao.new_instance_failure", getEntityName()), e);
-        }
+    public @Nullable T init(@Nullable T entity) {
+        if(entity != null) Hibernate.initialize(entity);
+        return entity;
     }
 
-    protected void _update(@NotNull T entity, boolean deep) {
+    public void update(@NotNull T entity) {
+        update(entity, true);
+    }
+
+    public void update(@NotNull T entity, boolean deep) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-            _withTransaction(session, s -> _update(s, entity, deep));
+            withTransaction(session, s -> update(s, entity, deep));
             session.refresh(entity);
         }
     }
 
-    protected <R> R _withSessionGet(@NotNull SessionAction<R> delegate) {
+    public <R> R withSessionGet(@NotNull SessionAction<R> delegate) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
             return delegate.action(session);
         }
     }
 
-    protected void _withSessionUpdate(@NotNull SessionUpdateAction delegate) {
+    public void withSessionUpdate(@NotNull SessionUpdateAction delegate) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-            _withTransaction(session, delegate);
+            withTransaction(session, delegate);
         }
     }
 
-    protected @Nullable T init(@Nullable T entity) {
-        if(entity != null) Hibernate.initialize(entity);
-        return entity;
+    public void withTransaction(@NotNull Session session, @NotNull SessionUpdateAction delegate) {
+        Transaction transaction = session.beginTransaction();
+        try {
+            delegate.action(session);
+            session.flush();
+            transaction.commit();
+        }
+        catch(Exception e) {
+            transaction.rollback();
+            if(((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException))) {
+                Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
+                if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
+            }
+            throw e;
+        }
     }
 
-    private void _update(@NotNull Session session, @Nullable JpaBase entity, boolean deep) {
+    private @NotNull List<T> notNullResults(@Nullable List<T> results) {
+        return (results == null) ? Collections.emptyList() : results;
+    }
+
+    private void update(@NotNull Session session, @Nullable JpaBase entity, boolean deep) {
         if(entity != null) {
             if(deep) Reflection.forEachField(entity.getClass(), field -> {
                 if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
                     try {
                         field.setAccessible(true);
-                        _update(session, (JpaBase)field.get(entity), true);
+                        update(session, (JpaBase)field.get(entity), true);
                     }
                     catch(Exception e) {
                         if(e instanceof RuntimeException) throw (RuntimeException)e;
@@ -183,27 +220,6 @@ public abstract class AbstractDao<T extends JpaBase> {
                 case DIRTY:   session.merge(entity);   entity.setJpaState(JpaState.NORMAL); break;
                 default:                                                                    break;
             }/*@f1*/
-        }
-    }
-
-    private @NotNull List<T> notNullResults(@Nullable List<T> results) {
-        return (results == null) ? Collections.emptyList() : results;
-    }
-
-    protected static void _withTransaction(@NotNull Session session, @NotNull SessionUpdateAction delegate) {
-        Transaction transaction = session.beginTransaction();
-        try {
-            delegate.action(session);
-            session.flush();
-            transaction.commit();
-        }
-        catch(Exception e) {
-            transaction.rollback();
-            if(((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException))) {
-                Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
-                if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
-            }
-            throw e;
         }
     }
 

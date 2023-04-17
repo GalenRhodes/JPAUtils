@@ -85,10 +85,6 @@ public class JpaBase {
         return jpaState;
     }
 
-    public boolean isNormal() {
-        return (jpaState == JpaState.NORMAL);
-    }
-
     public boolean isDeleted() {
         return (jpaState == JpaState.DELETED);
     }
@@ -101,8 +97,8 @@ public class JpaBase {
         return (jpaState == JpaState.NEW);
     }
 
-    public void setJpaState(@NotNull JpaState jpaState) {
-        this.jpaState = jpaState;
+    public boolean isNormal() {
+        return (jpaState == JpaState.NORMAL);
     }
 
     protected @NotNull Map<String, Field> getComparableFields() {
@@ -119,6 +115,10 @@ public class JpaBase {
         }
 
         return fields;
+    }
+
+    public void setJpaState(@NotNull JpaState jpaState) {
+        this.jpaState = jpaState;
     }
 
     public void setAsDirty() {
