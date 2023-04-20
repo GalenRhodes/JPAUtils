@@ -23,27 +23,21 @@ package com.projectgalen.lib.jpa.utils.base;
 // ===========================================================================
 
 import com.projectgalen.lib.jpa.utils.HibernateUtil;
+import com.projectgalen.lib.jpa.utils.QueryAction;
+import com.projectgalen.lib.jpa.utils.SessionAction;
+import com.projectgalen.lib.jpa.utils.SessionUpdateAction;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
-import com.projectgalen.lib.jpa.utils.errors.SvcConstraintViolation;
 import com.projectgalen.lib.utils.PGProperties;
 import com.projectgalen.lib.utils.PGResourceBundle;
 import com.projectgalen.lib.utils.U;
-import com.projectgalen.lib.utils.reflection.Reflection;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PersistenceException;
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.exception.ConstraintViolationException;
 import org.hibernate.query.Query;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @SuppressWarnings({ "UnusedReturnValue", "unused", "SameParameterValue" })
 public class AbstractDao<T extends JpaBase> {
@@ -55,28 +49,6 @@ public class AbstractDao<T extends JpaBase> {
 
     public AbstractDao(@NotNull Class<T> entityClass) {
         this.entityClass = entityClass;
-    }
-
-    public @NotNull Class<T> getEntityClass() {
-        return entityClass;
-    }
-
-    public @NotNull String getEntityName() {
-        return getEntityClass().getSimpleName();
-    }
-
-    public @NotNull T getNewEntity() {
-        try {
-            try {
-                return entityClass.getConstructor(boolean.class).newInstance(false);
-            }
-            catch(Exception e) {
-                return entityClass.getConstructor().newInstance();
-            }
-        }
-        catch(Exception e) {
-            throw new DaoException(msgs.format("msg.err.dao.new_instance_failure", getEntityName()), e);
-        }
     }
 
     /**
@@ -96,7 +68,7 @@ public class AbstractDao<T extends JpaBase> {
     public void delete(@NotNull T entity) {
         if(!entity.isNew()) {
             try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-                withTransaction(session, s -> s.remove(entity));
+                HibernateUtil.withTransaction(session, s -> s.remove(entity));
                 entity.setJpaState(JpaState.DELETED);
             }
         }
@@ -115,7 +87,7 @@ public class AbstractDao<T extends JpaBase> {
     public @NotNull List<T> findAll() {
         return findAll(true);
     }
-    
+
     public @NotNull List<T> findAll(boolean initializeResults) {
         return find(String.format("from %s e", getEntityName()), null, initializeResults);
     }
@@ -150,6 +122,28 @@ public class AbstractDao<T extends JpaBase> {
         return get(U.asArray(searchField), U.asArray(searchValue));
     }
 
+    public @NotNull Class<T> getEntityClass() {
+        return entityClass;
+    }
+
+    public @NotNull String getEntityName() {
+        return getEntityClass().getSimpleName();
+    }
+
+    public @NotNull T getNewEntity() {
+        try {
+            try {
+                return entityClass.getConstructor(boolean.class).newInstance(false);
+            }
+            catch(Exception e) {
+                return entityClass.getConstructor().newInstance();
+            }
+        }
+        catch(Exception e) {
+            throw new DaoException(msgs.format("msg.err.dao.new_instance_failure", getEntityName()), e);
+        }
+    }
+
     public @Nullable T init(@Nullable T entity) {
         if(entity != null) Hibernate.initialize(entity);
         return entity;
@@ -161,7 +155,7 @@ public class AbstractDao<T extends JpaBase> {
 
     public void update(@NotNull T entity, boolean deep) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-            withTransaction(session, s -> update(s, entity, deep));
+            HibernateUtil.withTransaction(session, s -> HibernateUtil.update(s, entity, deep));
             session.refresh(entity);
         }
     }
@@ -174,64 +168,11 @@ public class AbstractDao<T extends JpaBase> {
 
     public void withSessionUpdate(@NotNull SessionUpdateAction delegate) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-            withTransaction(session, delegate);
-        }
-    }
-
-    public void withTransaction(@NotNull Session session, @NotNull SessionUpdateAction delegate) {
-        Transaction transaction = session.beginTransaction();
-        try {
-            delegate.action(session);
-            session.flush();
-            transaction.commit();
-        }
-        catch(Exception e) {
-            transaction.rollback();
-            if(((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException))) {
-                Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
-                if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
-            }
-            throw e;
+            HibernateUtil.withTransaction(session, delegate);
         }
     }
 
     private @NotNull List<T> notNullResults(@Nullable List<T> results) {
         return (results == null) ? Collections.emptyList() : results;
-    }
-
-    private void update(@NotNull Session session, @Nullable JpaBase entity, boolean deep) {
-        if(entity != null) {
-            if(deep) Reflection.forEachField(entity.getClass(), field -> {
-                if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
-                    try {
-                        field.setAccessible(true);
-                        update(session, (JpaBase)field.get(entity), true);
-                    }
-                    catch(Exception e) {
-                        if(e instanceof RuntimeException) throw (RuntimeException)e;
-                        throw new DaoException(e);
-                    }
-                }
-                return false;
-            });
-            switch(entity.getJpaState()) {/*@f0*/
-                case NEW:
-                case DELETED: session.persist(entity); entity.setJpaState(JpaState.NORMAL); break;
-                case DIRTY:   session.merge(entity);   entity.setJpaState(JpaState.NORMAL); break;
-                default:                                                                    break;
-            }/*@f1*/
-        }
-    }
-
-    public interface QueryAction<O, R> {
-        R action(@NotNull Query<O> query);
-    }
-
-    public interface SessionAction<R> {
-        R action(@NotNull Session session);
-    }
-
-    public interface SessionUpdateAction {
-        void action(@NotNull Session session);
     }
 }
