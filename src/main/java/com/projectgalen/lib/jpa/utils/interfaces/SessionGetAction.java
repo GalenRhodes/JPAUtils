@@ -1,4 +1,4 @@
-package com.projectgalen.lib.jpa.utils;
+package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
@@ -25,6 +25,6 @@ package com.projectgalen.lib.jpa.utils;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
-public interface SessionAction<R> {
+public interface SessionGetAction<R> {
     R action(@NotNull Session session);
 }

@@ -1,11 +1,11 @@
-package com.projectgalen.lib.jpa.utils;
+package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: QueryAction.java
+//    FILENAME: FromEntityAction.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: April 20, 2023
+//        DATE: April 21, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,9 +22,9 @@ package com.projectgalen.lib.jpa.utils;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import org.hibernate.query.Query;
+import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import org.jetbrains.annotations.NotNull;
 
-public interface QueryAction<O, R> {
-    R action(@NotNull Query<O> query);
+public interface FromEntityAction<R, T extends JpaBase> {
+    R action(@NotNull T entity);
 }

@@ -23,11 +23,11 @@ package com.projectgalen.lib.jpa.utils.base;
 // ===========================================================================
 
 import com.projectgalen.lib.jpa.utils.HibernateUtil;
-import com.projectgalen.lib.jpa.utils.QueryAction;
-import com.projectgalen.lib.jpa.utils.SessionAction;
-import com.projectgalen.lib.jpa.utils.SessionUpdateAction;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
+import com.projectgalen.lib.jpa.utils.interfaces.QueryAction;
+import com.projectgalen.lib.jpa.utils.interfaces.SessionDoAction;
+import com.projectgalen.lib.jpa.utils.interfaces.SessionGetAction;
 import com.projectgalen.lib.utils.PGProperties;
 import com.projectgalen.lib.utils.PGResourceBundle;
 import com.projectgalen.lib.utils.U;
@@ -150,23 +150,20 @@ public class AbstractDao<T extends JpaBase> {
     }
 
     public void update(@NotNull T entity) {
-        update(entity, true);
+        HibernateUtil.update(entity, true);
     }
 
     public void update(@NotNull T entity, boolean deep) {
-        try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-            HibernateUtil.withTransaction(session, s -> HibernateUtil.update(s, entity, deep));
-            session.refresh(entity);
-        }
+        HibernateUtil.update(entity, deep);
     }
 
-    public <R> R withSessionGet(@NotNull SessionAction<R> delegate) {
+    public <R> R withSessionGet(@NotNull SessionGetAction<R> delegate) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
             return delegate.action(session);
         }
     }
 
-    public void withSessionUpdate(@NotNull SessionUpdateAction delegate) {
+    public void withSessionUpdate(@NotNull SessionDoAction delegate) {
         try(Session session = HibernateUtil.getSessionFactory().openSession()) {
             HibernateUtil.withTransaction(session, delegate);
         }

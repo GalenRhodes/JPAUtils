@@ -26,6 +26,9 @@ import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
 import com.projectgalen.lib.jpa.utils.errors.SvcConstraintViolation;
+import com.projectgalen.lib.jpa.utils.interfaces.EntityAction;
+import com.projectgalen.lib.jpa.utils.interfaces.SessionDoAction;
+import com.projectgalen.lib.jpa.utils.interfaces.SessionGetAction;
 import com.projectgalen.lib.utils.PGProperties;
 import com.projectgalen.lib.utils.PGResourceBundle;
 import com.projectgalen.lib.utils.reflection.Reflection;
@@ -51,17 +54,54 @@ public class HibernateUtil {
         return HOLDER.INSTANCE;
     }
 
-    private static final class HOLDER {
-        private static final SessionFactory INSTANCE = new Configuration().configure().buildSessionFactory();
+    public static void refresh(@Nullable JpaBase entity) {
+        if(entity != null) withSessionDo(session -> _refresh(session, entity, true));
     }
 
-    public static <T extends JpaBase> void update(@NotNull Session session, @Nullable T entity, boolean deep) {
+    public static void refresh(@Nullable JpaBase entity, boolean deep) {
+        if(entity != null) withSessionDo(session -> _refresh(session, entity, deep));
+    }
+
+    public static <T extends JpaBase> void update(@Nullable T entity, boolean deep) {
+        if(entity != null) withSessionDo(session -> withTransaction(session, s -> update(s, entity, deep)));
+    }
+
+    public static <T extends JpaBase> void update(@NotNull Session session, @NotNull T entity, boolean deep) {
+        if(deep) withEachEntity(entity, true, e -> update(session, e));
+        else update(session, entity);
+    }
+
+    public static void update(@NotNull Session session, @NotNull JpaBase entity) {
+        switch(entity.getJpaState()) {
+            case NEW:
+            case DELETED:
+                session.persist(entity);
+                entity.setJpaState(JpaState.NORMAL);
+                session.refresh(entity);
+                break;
+            case DIRTY:
+                session.merge(entity);
+                entity.setJpaState(JpaState.NORMAL);
+                session.refresh(entity);
+                break;
+            default:
+                break;
+        }
+    }
+
+    public static void withEachEntity(@Nullable JpaBase entity, @NotNull EntityAction<JpaBase> action) {
+        withEachEntity(entity, false, action);
+    }
+
+    public static void withEachEntity(@Nullable JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action) {
         if(entity != null) {
-            if(deep) Reflection.forEachField(entity.getClass(), field -> {
+            if(!parentLast) action.action(entity);
+
+            Reflection.forEachField(entity.getClass(), field -> {
                 if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
                     try {
                         field.setAccessible(true);
-                        update(session, (JpaBase)field.get(entity), true);
+                        withEachEntity((JpaBase)field.get(entity), parentLast, action);
                     }
                     catch(Exception e) {
                         if(e instanceof RuntimeException) throw (RuntimeException)e;
@@ -70,16 +110,24 @@ public class HibernateUtil {
                 }
                 return false;
             });
-            switch(entity.getJpaState()) {/*@f0*/
-                case NEW:
-                case DELETED: session.persist(entity); entity.setJpaState(JpaState.NORMAL); break;
-                case DIRTY:   session.merge(entity);   entity.setJpaState(JpaState.NORMAL); break;
-                default:                                                                    break;
-            }/*@f1*/
+
+            if(parentLast) action.action(entity);
         }
     }
 
-    public static void withTransaction(@NotNull Session session, @NotNull SessionUpdateAction delegate) {
+    public static void withSessionDo(@NotNull SessionDoAction action) {
+        try(Session session = getSessionFactory().openSession()) {
+            action.action(session);
+        }
+    }
+
+    public static <R> R withSessionGet(@NotNull SessionGetAction<R> action) {
+        try(Session session = getSessionFactory().openSession()) {
+            return action.action(session);
+        }
+    }
+
+    public static void withTransaction(@NotNull Session session, @NotNull SessionDoAction delegate) {
         Transaction transaction = session.beginTransaction();
 
         try {
@@ -95,5 +143,14 @@ public class HibernateUtil {
             }
             throw e;
         }
+    }
+
+    private static void _refresh(@NotNull Session session, @NotNull JpaBase entity, boolean deep) {
+        if(deep) withEachEntity(entity, true, session::refresh);
+        else session.refresh(entity);
+    }
+
+    private static final class HOLDER {
+        private static final SessionFactory INSTANCE = new Configuration().configure().buildSessionFactory();
     }
 }

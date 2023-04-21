@@ -22,6 +22,7 @@ package com.projectgalen.lib.jpa.utils.base;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
+import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import jakarta.persistence.Column;
 import org.jetbrains.annotations.NotNull;
@@ -65,6 +66,22 @@ public class JpaBase {
         catch(Exception ignore) {
             return false;
         }
+    }
+
+    public void refresh() {
+        HibernateUtil.refresh(this, true);
+    }
+
+    public void refresh(boolean deep) {
+        HibernateUtil.refresh(this, deep);
+    }
+
+    public void saveChanges() {
+        HibernateUtil.update(this, true);
+    }
+
+    public void saveChanges(boolean deep) {
+        HibernateUtil.update(this, deep);
     }
 
     public @Override int hashCode() {
