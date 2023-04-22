@@ -43,6 +43,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.sql.SQLIntegrityConstraintViolationException;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -62,17 +63,29 @@ public class HibernateUtil {
         if(entity != null) withSessionDo(session -> _refresh(session, entity, deep));
     }
 
-    public static <T extends JpaBase> void update(@Nullable T entity, boolean deep) {
+    public static void update(@NotNull List<JpaBase> entities) {
+        update(entities, true);
+    }
+
+    public static void update(@NotNull List<JpaBase> entities, boolean deep) {
+        if(entities.size() > 0) withSessionDo(session -> withTransaction(session, s -> { for(JpaBase entity : entities) update(s, entity, deep); }));
+    }
+
+    public static void update(@Nullable JpaBase entity) {
+        update(entity, true);
+    }
+
+    public static void update(@Nullable JpaBase entity, boolean deep) {
         if(entity != null) withSessionDo(session -> withTransaction(session, s -> update(s, entity, deep)));
     }
 
-    public static <T extends JpaBase> void update(@NotNull Session session, @NotNull T entity, boolean deep) {
+    public static void update(@NotNull Session session, @Nullable JpaBase entity, boolean deep) {
         if(deep) withEachEntity(entity, true, e -> update(session, e));
         else update(session, entity);
     }
 
-    public static void update(@NotNull Session session, @NotNull JpaBase entity) {
-        switch(entity.getJpaState()) {
+    public static void update(@NotNull Session session, @Nullable JpaBase entity) {
+        if(entity != null) switch(entity.getJpaState()) {
             case NEW:
             case DELETED:
                 session.persist(entity);
