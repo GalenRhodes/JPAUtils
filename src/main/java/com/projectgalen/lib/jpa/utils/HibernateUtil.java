@@ -105,7 +105,7 @@ public class HibernateUtil {
             List<JpaBase> list = new ArrayList<>();
             withTransaction(session, transaction -> withEachEntity(entity, true, child -> _update(session, child, list)));
             for(JpaBase child : list) {
-                child.setJpaState(JpaState.NORMAL);
+                if(child.getJpaState() != JpaState.NORMAL) child.setJpaState(JpaState.NORMAL);
                 session.refresh(child);
             }
         }
@@ -113,9 +113,9 @@ public class HibernateUtil {
     }
 
     public static void update(@NotNull Session session, @Nullable JpaBase entity) {
-        if((entity != null) && (entity.getJpaState() != JpaState.NORMAL)) {
+        if((entity != null)) {
             withTransaction(session, transaction -> _update(session, entity, null));
-            entity.setJpaState(JpaState.NORMAL);
+            if(entity.getJpaState() != JpaState.NORMAL) entity.setJpaState(JpaState.NORMAL);
             session.refresh(entity);
         }
     }
@@ -151,14 +151,15 @@ public class HibernateUtil {
     }
 
     private static void _update(@NotNull Session session, @NotNull JpaBase entity, List<JpaBase> list) {
-        if(entity.getJpaState() != JpaState.NORMAL) {
-            if(entity.getJpaState() == JpaState.DELETED || entity.getJpaState() == JpaState.NEW) session.persist(entity);
-            else if(entity.getJpaState() == JpaState.DIRTY) session.merge(entity);
-            if(list != null) list.add(entity);
-        }
+        switch(entity.getJpaState()) {/*@f0*/
+            case NEW:
+            case DELETED: session.persist(entity);
+            case DIRTY:   session.merge(entity);
+        }/*@f1*/
+        if(list != null) list.add(entity);
     }
 
-    private static boolean traverseChildren(@NotNull JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action, Field field) {
+    private static boolean traverseChildren(@NotNull JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action, @NotNull Field field) {
         if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
             try {
                 field.setAccessible(true);
