@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: SessionAction.java
+//    FILENAME: TransactionAction.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: April 20, 2023
+//        DATE: April 24, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,9 +22,8 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import org.hibernate.Session;
-import org.jetbrains.annotations.NotNull;
+import org.hibernate.Transaction;
 
-public interface SessionGetAction<R> {
-    R action(@NotNull Session session);
+public interface TransactionAction {
+    void action(Transaction transaction);
 }

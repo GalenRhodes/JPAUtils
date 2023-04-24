@@ -25,6 +25,7 @@ package com.projectgalen.lib.jpa.utils.base;
 import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import jakarta.persistence.Column;
+import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -68,20 +69,40 @@ public class JpaBase {
         }
     }
 
-    public void refresh() {
-        HibernateUtil.refresh(this, true);
+    public void refresh(boolean deep) {
+        refresh(getSession(), deep);
     }
 
-    public void refresh(boolean deep) {
+    public void refresh() {
+        refresh(true);
+    }
+
+    public void refresh(Session session) {
+        refresh(session, true);
+    }
+
+    public void refresh(Session session, boolean deep) {
         HibernateUtil.refresh(this, deep);
     }
 
-    public void saveChanges() {
-        HibernateUtil.update(this, true);
+    public void saveChanges(boolean deep) {
+        saveChanges(getSession(), deep);
     }
 
-    public void saveChanges(boolean deep) {
-        HibernateUtil.update(this, deep);
+    public void saveChanges() {
+        saveChanges(true);
+    }
+
+    public void saveChanges(Session session) {
+        saveChanges(session, true);
+    }
+
+    public void saveChanges(Session session, boolean deep) {
+        HibernateUtil.update(session, this, deep);
+    }
+
+    public static Session getSession() {
+        return HibernateUtil.shared().getSession();
     }
 
     public @Override int hashCode() {

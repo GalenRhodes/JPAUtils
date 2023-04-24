@@ -27,10 +27,8 @@ import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
 import com.projectgalen.lib.jpa.utils.errors.SvcConstraintViolation;
 import com.projectgalen.lib.jpa.utils.interfaces.EntityAction;
-import com.projectgalen.lib.jpa.utils.interfaces.SessionDoAction;
-import com.projectgalen.lib.jpa.utils.interfaces.SessionGetAction;
+import com.projectgalen.lib.jpa.utils.interfaces.TransactionAction;
 import com.projectgalen.lib.utils.PGProperties;
-import com.projectgalen.lib.utils.PGResourceBundle;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PersistenceException;
@@ -42,33 +40,56 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Field;
 import java.sql.SQLIntegrityConstraintViolationException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@SuppressWarnings("unused")
 public class HibernateUtil {
-    private static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
-    private static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
+    private static final PGProperties props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
+
+    private final Session session;
+
+    private HibernateUtil() {
+        session = getSessionFactory().openSession();
+    }
+
+    public Session getSession() {
+        return session;
+    }
 
     public static SessionFactory getSessionFactory() {
         return HOLDER.INSTANCE;
     }
 
     public static void refresh(@Nullable JpaBase entity) {
-        if(entity != null) withSessionDo(session -> _refresh(session, entity, true));
+        if(entity != null) refresh(shared().getSession(), entity, true);
     }
 
     public static void refresh(@Nullable JpaBase entity, boolean deep) {
-        if(entity != null) withSessionDo(session -> _refresh(session, entity, deep));
+        if(entity != null) refresh(shared().getSession(), entity, deep);
     }
+
+    public static void refresh(@NotNull Session session, @NotNull JpaBase entity) {
+        refresh(session, entity, true);
+    }
+
+    public static void refresh(@NotNull Session session, @NotNull JpaBase entity, boolean deep) {
+        if(deep) withEachEntity(entity, true, session::refresh);
+        else session.refresh(entity);
+    }
+
+    public static HibernateUtil shared() { return HibernateUtilHolder.INSTANCE; }
 
     public static void update(@NotNull List<JpaBase> entities) {
         update(entities, true);
     }
 
     public static void update(@NotNull List<JpaBase> entities, boolean deep) {
-        if(entities.size() > 0) withSessionDo(session -> withTransaction(session, s -> { for(JpaBase entity : entities) update(s, entity, deep); }));
+        for(JpaBase entity : entities) update(shared().getSession(), entity, deep);
     }
 
     public static void update(@Nullable JpaBase entity) {
@@ -76,29 +97,26 @@ public class HibernateUtil {
     }
 
     public static void update(@Nullable JpaBase entity, boolean deep) {
-        if(entity != null) withSessionDo(session -> withTransaction(session, s -> update(s, entity, deep)));
+        if(entity != null) update(shared().getSession(), entity, deep);
     }
 
     public static void update(@NotNull Session session, @Nullable JpaBase entity, boolean deep) {
-        if(deep) withEachEntity(entity, true, e -> update(session, e));
+        if(deep) {
+            List<JpaBase> list = new ArrayList<>();
+            withTransaction(session, transaction -> withEachEntity(entity, true, child -> _update(session, child, list)));
+            for(JpaBase child : list) {
+                child.setJpaState(JpaState.NORMAL);
+                session.refresh(child);
+            }
+        }
         else update(session, entity);
     }
 
     public static void update(@NotNull Session session, @Nullable JpaBase entity) {
-        if(entity != null) switch(entity.getJpaState()) {
-            case NEW:
-            case DELETED:
-                session.persist(entity);
-                entity.setJpaState(JpaState.NORMAL);
-                session.refresh(entity);
-                break;
-            case DIRTY:
-                session.merge(entity);
-                entity.setJpaState(JpaState.NORMAL);
-                session.refresh(entity);
-                break;
-            default:
-                break;
+        if((entity != null) && (entity.getJpaState() != JpaState.NORMAL)) {
+            withTransaction(session, transaction -> _update(session, entity, null));
+            entity.setJpaState(JpaState.NORMAL);
+            session.refresh(entity);
         }
     }
 
@@ -109,42 +127,16 @@ public class HibernateUtil {
     public static void withEachEntity(@Nullable JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action) {
         if(entity != null) {
             if(!parentLast) action.action(entity);
-
-            Reflection.forEachField(entity.getClass(), field -> {
-                if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
-                    try {
-                        field.setAccessible(true);
-                        withEachEntity((JpaBase)field.get(entity), parentLast, action);
-                    }
-                    catch(Exception e) {
-                        if(e instanceof RuntimeException) throw (RuntimeException)e;
-                        throw new DaoException(e);
-                    }
-                }
-                return false;
-            });
-
+            Reflection.forEachField(entity.getClass(), field -> traverseChildren(entity, parentLast, action, field));
             if(parentLast) action.action(entity);
         }
     }
 
-    public static void withSessionDo(@NotNull SessionDoAction action) {
-        try(Session session = getSessionFactory().openSession()) {
-            action.action(session);
-        }
-    }
-
-    public static <R> R withSessionGet(@NotNull SessionGetAction<R> action) {
-        try(Session session = getSessionFactory().openSession()) {
-            return action.action(session);
-        }
-    }
-
-    public static void withTransaction(@NotNull Session session, @NotNull SessionDoAction delegate) {
+    public static void withTransaction(@NotNull Session session, @NotNull TransactionAction delegate) {
         Transaction transaction = session.beginTransaction();
 
         try {
-            delegate.action(session);
+            delegate.action(transaction);
             session.flush();
             transaction.commit();
         }
@@ -158,12 +150,33 @@ public class HibernateUtil {
         }
     }
 
-    private static void _refresh(@NotNull Session session, @NotNull JpaBase entity, boolean deep) {
-        if(deep) withEachEntity(entity, true, session::refresh);
-        else session.refresh(entity);
+    private static void _update(@NotNull Session session, @NotNull JpaBase entity, List<JpaBase> list) {
+        if(entity.getJpaState() != JpaState.NORMAL) {
+            if(entity.getJpaState() == JpaState.DELETED || entity.getJpaState() == JpaState.NEW) session.persist(entity);
+            else if(entity.getJpaState() == JpaState.DIRTY) session.merge(entity);
+            if(list != null) list.add(entity);
+        }
+    }
+
+    private static boolean traverseChildren(@NotNull JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action, Field field) {
+        if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
+            try {
+                field.setAccessible(true);
+                withEachEntity((JpaBase)field.get(entity), parentLast, action);
+            }
+            catch(Exception e) {
+                if(e instanceof RuntimeException) throw (RuntimeException)e;
+                throw new DaoException(e);
+            }
+        }
+        return false;
     }
 
     private static final class HOLDER {
         private static final SessionFactory INSTANCE = new Configuration().configure().buildSessionFactory();
+    }
+
+    private static final class HibernateUtilHolder {
+        private static final HibernateUtil INSTANCE = new HibernateUtil();
     }
 }

@@ -26,8 +26,6 @@ import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
 import com.projectgalen.lib.jpa.utils.interfaces.QueryAction;
-import com.projectgalen.lib.jpa.utils.interfaces.SessionDoAction;
-import com.projectgalen.lib.jpa.utils.interfaces.SessionGetAction;
 import com.projectgalen.lib.utils.PGProperties;
 import com.projectgalen.lib.utils.PGResourceBundle;
 import com.projectgalen.lib.utils.U;
@@ -67,10 +65,9 @@ public class AbstractDao<T extends JpaBase> {
 
     public void delete(@NotNull T entity) {
         if(!entity.isNew()) {
-            try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-                HibernateUtil.withTransaction(session, s -> s.remove(entity));
-                entity.setJpaState(JpaState.DELETED);
-            }
+            Session session = HibernateUtil.shared().getSession();
+            HibernateUtil.withTransaction(session, transaction -> session.remove(entity));
+            entity.setJpaState(JpaState.DELETED);
         }
     }
 
@@ -93,11 +90,9 @@ public class AbstractDao<T extends JpaBase> {
     }
 
     public <R> @Nullable R findWithAction(@NotNull String queryString, @Nullable Map<String, Object> parameters, @NotNull QueryAction<T, R> queryAction) {
-        return withSessionGet(session -> {
-            Query<T> query = session.createQuery(queryString, getEntityClass());
-            if(parameters != null) for(Map.Entry<String, Object> entry : parameters.entrySet()) query.setParameter(entry.getKey(), entry.getValue());
-            return queryAction.action(query);
-        });
+        Query<T> query = HibernateUtil.shared().getSession().createQuery(queryString, getEntityClass());
+        if(parameters != null) for(Map.Entry<String, Object> entry : parameters.entrySet()) query.setParameter(entry.getKey(), entry.getValue());
+        return queryAction.action(query);
     }
 
     public @Nullable T get(String @NotNull [] searchFields, Object @NotNull [] searchValues) {
@@ -155,18 +150,6 @@ public class AbstractDao<T extends JpaBase> {
 
     public void update(@NotNull T entity, boolean deep) {
         HibernateUtil.update(entity, deep);
-    }
-
-    public <R> R withSessionGet(@NotNull SessionGetAction<R> delegate) {
-        try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-            return delegate.action(session);
-        }
-    }
-
-    public void withSessionUpdate(@NotNull SessionDoAction delegate) {
-        try(Session session = HibernateUtil.getSessionFactory().openSession()) {
-            HibernateUtil.withTransaction(session, delegate);
-        }
     }
 
     private @NotNull List<T> notNullResults(@Nullable List<T> results) {
