@@ -29,6 +29,7 @@ import com.projectgalen.lib.jpa.utils.errors.SvcConstraintViolation;
 import com.projectgalen.lib.jpa.utils.interfaces.EntityAction;
 import com.projectgalen.lib.jpa.utils.interfaces.TransactionAction;
 import com.projectgalen.lib.utils.PGProperties;
+import com.projectgalen.lib.utils.concurrency.Locks;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PersistenceException;
@@ -44,12 +45,14 @@ import java.lang.reflect.Field;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @SuppressWarnings("unused")
 public class HibernateUtil {
-    private static final PGProperties props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
+    private static final PGProperties  props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
+    private static final ReentrantLock lock  = new ReentrantLock(true);
 
     private final Session session;
 
@@ -78,8 +81,10 @@ public class HibernateUtil {
     }
 
     public static void refresh(@NotNull Session session, @NotNull JpaBase entity, boolean deep) {
-        if(deep) withEachEntity(entity, true, session::refresh);
-        else session.refresh(entity);
+        Locks.doWithLock(lock, () -> {
+            if(deep) withEachEntity(entity, session::refresh);
+            else session.refresh(entity);
+        });
     }
 
     public static HibernateUtil shared() { return HibernateUtilHolder.INSTANCE; }
@@ -104,10 +109,12 @@ public class HibernateUtil {
         if(deep) {
             List<JpaBase> list = new ArrayList<>();
             withTransaction(session, transaction -> withEachEntity(entity, true, child -> _update(session, child, list)));
-            for(JpaBase child : list) {
-                if(child.getJpaState() != JpaState.NORMAL) child.setJpaState(JpaState.NORMAL);
-                session.refresh(child);
-            }
+            Locks.doWithLock(lock, () -> {
+                for(JpaBase child : list) {
+                    if(child.getJpaState() != JpaState.NORMAL) child.setJpaState(JpaState.NORMAL);
+                    session.refresh(child);
+                }
+            });
         }
         else update(session, entity);
     }
@@ -116,12 +123,12 @@ public class HibernateUtil {
         if((entity != null)) {
             withTransaction(session, transaction -> _update(session, entity, null));
             if(entity.getJpaState() != JpaState.NORMAL) entity.setJpaState(JpaState.NORMAL);
-            session.refresh(entity);
+            Locks.doWithLock(lock, () -> session.refresh(entity));
         }
     }
 
     public static void withEachEntity(@Nullable JpaBase entity, @NotNull EntityAction<JpaBase> action) {
-        withEachEntity(entity, false, action);
+        withEachEntity(entity, true, action);
     }
 
     public static void withEachEntity(@Nullable JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action) {
@@ -133,21 +140,30 @@ public class HibernateUtil {
     }
 
     public static void withTransaction(@NotNull Session session, @NotNull TransactionAction delegate) {
-        Transaction transaction = session.beginTransaction();
+        Locks.doWithLock(lock, () -> {
+            Transaction transaction = session.beginTransaction();
 
-        try {
-            delegate.action(transaction);
-            session.flush();
-            transaction.commit();
-        }
-        catch(Exception e) {
-            transaction.rollback();
-            if(((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException))) {
-                Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
-                if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
+            try {
+                if(transaction.isActive()) _rollback(transaction);
+                delegate.action(transaction);
+                session.flush();
+                transaction.commit();
             }
-            throw e;
-        }
+            catch(Exception e) {
+                _rollback(transaction);
+
+                if(((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException))) {
+                    Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
+                    if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
+                }
+
+                throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));
+            }
+        });
+    }
+
+    private static void _rollback(Transaction transaction) {
+        try { transaction.rollback(); } catch(Exception e) { e.printStackTrace(System.err); }
     }
 
     private static void _update(@NotNull Session session, @NotNull JpaBase entity, List<JpaBase> list) {
@@ -166,8 +182,7 @@ public class HibernateUtil {
                 withEachEntity((JpaBase)field.get(entity), parentLast, action);
             }
             catch(Exception e) {
-                if(e instanceof RuntimeException) throw (RuntimeException)e;
-                throw new DaoException(e);
+                throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));
             }
         }
         return false;
