@@ -124,8 +124,8 @@ public class HibernateUtil {
         }
 
         if(sortFields.length > 0) {
-            sb.append(" sort by ").append(sortFields[0]);
-            for(int i = 1; i < sortFields.length; i++) sb.append(", ").append(sortFields[i]);
+            sb.append(" sort by e.").append(sortFields[0]);
+            for(int i = 1; i < sortFields.length; i++) sb.append(", e.").append(sortFields[i]);
         }
 
         String queryString = sb.toString();
