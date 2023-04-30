@@ -73,18 +73,40 @@ public class HibernateUtil {
     }
 
     public static @NotNull <T extends JpaBase> List<T> find(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields) {
+        return find(cls, searchFields, searchValues, sortFields, 0, Integer.MAX_VALUE);
+    }
+
+    public static @NotNull <T extends JpaBase> List<T> find(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn) {
         return Objects.requireNonNullElse(HibernateUtil.find(cls, searchFields, searchValues, sortFields, Query::list), new ArrayList<>());
     }
 
     public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, @NotNull QueryDelegate<E, R> queryAction) {
+        return find(cls, queryString, parameters, 0, Integer.MAX_VALUE, queryAction);
+    }
+
+    public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+        return find(cls, queryString, parameters, 0, maxRecordsToReturn, queryAction);
+    }
+
+    public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         return HibernateUtil.withSessionGet((session, tx) -> {
             Query<E> query = session.createQuery(queryString, cls);
             for(Map.Entry<String, Object> entry : parameters.entrySet()) query.setParameter(entry.getKey(), entry.getValue());
+            if(startingRecord > 0) query.setFirstResult(startingRecord);
+            query.setMaxResults(maxRecordsToReturn);
             return initialize(queryAction.action(query));
         });
     }
 
     public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, @NotNull QueryDelegate<E, R> queryAction) {
+        return find(cls, searchFields, searchValues, sortFields, 0, Integer.MAX_VALUE, queryAction);
+    }
+
+    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+        return find(cls, searchFields, searchValues, sortFields, 0, maxRecordsToReturn, queryAction);
+    }
+
+    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         if(searchFields.length != searchValues.length) throw new IllegalArgumentException(msgs.format("msg.err.fields_values_count_mismatch", searchFields.length, searchValues.length));
 
         Map<String, Object> parameters = new LinkedHashMap<>();
@@ -107,19 +129,35 @@ public class HibernateUtil {
         }
 
         String queryString = sb.toString();
-        return find(cls, queryString, parameters, queryAction);
+        return find(cls, queryString, parameters, startingRecord, maxRecordsToReturn, queryAction);
     }
 
     public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls) {
-        return find(cls, STRNA, OBJNA, STRNA);
+        return findAll(cls, Integer.MAX_VALUE);
+    }
+
+    public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls, int maxRecordsToReturn) {
+        return findAll(cls, 0, maxRecordsToReturn);
+    }
+
+    public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls, int startingRecord, int maxRecordsToReturn) {
+        return find(cls, STRNA, OBJNA, STRNA, startingRecord, maxRecordsToReturn);
     }
 
     public static @Nullable <T extends JpaBase> T get(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues) {
-        return HibernateUtil.find(cls, searchFields, searchValues, STRNA, Query::uniqueResult);
+        return get(cls, searchFields, searchValues, 0);
+    }
+
+    public static @Nullable <T extends JpaBase> T get(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord) {
+        return HibernateUtil.find(cls, searchFields, searchValues, STRNA, startingRecord, 1, Query::uniqueResult);
     }
 
     public static @Nullable <T extends JpaBase> T get(Class<T> cls, @NotNull String searchField, @NotNull Object searchValue) {
-        return get(cls, U.asArray(searchField), U.asArray(searchValue));
+        return get(cls, searchField, searchValue, 0);
+    }
+
+    public static @Nullable <T extends JpaBase> T get(Class<T> cls, @NotNull String searchField, @NotNull Object searchValue, int startingRecord) {
+        return get(cls, U.wrap(searchField), U.wrap(searchValue), startingRecord);
     }
 
     public static <R> R initialize(R results) {
