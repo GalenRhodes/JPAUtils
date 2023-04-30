@@ -60,6 +60,9 @@ public class HibernateUtil {
     private static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
     private static final ReentrantLock    lock  = new ReentrantLock(true);
 
+    public static final String[] STRNA = new String[0];
+    public static final Object[] OBJNA = new Object[0];
+
     private HibernateUtil() { }
 
     public static <T extends JpaBase> void delete(@NotNull T entity) {
@@ -108,15 +111,15 @@ public class HibernateUtil {
     }
 
     public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls) {
-        return find(cls, new String[0], new String[0], new String[0]);
+        return find(cls, STRNA, OBJNA, STRNA);
     }
 
-    public static @Nullable <T extends JpaBase> T get(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields) {
-        return HibernateUtil.find(cls, searchFields, searchValues, sortFields, Query::uniqueResult);
+    public static @Nullable <T extends JpaBase> T get(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues) {
+        return HibernateUtil.find(cls, searchFields, searchValues, STRNA, Query::uniqueResult);
     }
 
     public static @Nullable <T extends JpaBase> T get(Class<T> cls, @NotNull String searchField, @NotNull Object searchValue) {
-        return get(cls, U.asArray(searchField), U.asArray(searchValue), new String[0]);
+        return get(cls, U.asArray(searchField), U.asArray(searchValue));
     }
 
     public static <R> R initialize(R results) {
