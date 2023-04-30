@@ -90,6 +90,10 @@ public class HibernateUtil {
 
     public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         return HibernateUtil.withSessionGet((session, tx) -> {
+            System.out.printf("\n\nQuery String: \"%s\"\n\n", queryString);
+            for(Map.Entry<String, Object> e : parameters.entrySet()) {
+                System.out.printf("%20s> '%s'\n", "'" + e.getKey() + "'", e.getValue());
+            }
             Query<E> query = session.createQuery(queryString, cls);
             for(Map.Entry<String, Object> entry : parameters.entrySet()) query.setParameter(entry.getKey(), entry.getValue());
             if(startingRecord > 0) query.setFirstResult(startingRecord);
@@ -124,7 +128,7 @@ public class HibernateUtil {
         }
 
         if(sortFields.length > 0) {
-            sb.append(" sort by e.").append(sortFields[0]);
+            sb.append(" order by e.").append(sortFields[0]);
             for(int i = 1; i < sortFields.length; i++) sb.append(", e.").append(sortFields[i]);
         }
 
