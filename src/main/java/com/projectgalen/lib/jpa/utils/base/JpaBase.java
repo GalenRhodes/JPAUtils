@@ -24,18 +24,16 @@ package com.projectgalen.lib.jpa.utils.base;
 
 import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
-import jakarta.persistence.Column;
-import org.hibernate.Session;
+import com.projectgalen.lib.utils.PGProperties;
+import com.projectgalen.lib.utils.PGResourceBundle;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Field;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
+import static com.projectgalen.lib.jpa.utils.HibernateUtil.withSessionDo;
 
 @SuppressWarnings("unused")
 public class JpaBase {
+    private static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
+    private static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
 
     protected JpaState jpaState;
 
@@ -47,80 +45,19 @@ public class JpaBase {
         jpaState = (dummy ? JpaState.NORMAL : JpaState.NEW);
     }
 
-    public @Override boolean equals(@Nullable Object o) {
-        try {
-            if(this == o) return true;
-            if((o == null) || (getClass() != o.getClass())) return false;
-
-            Map<String, Field> fieldsA = getComparableFields();
-            Map<String, Field> fieldsB = ((JpaBase)o).getComparableFields();
-
-            if(fieldsA.size() != fieldsB.size()) return false;
-
-            for(Map.Entry<String, Field> a : fieldsA.entrySet()) {
-                Field fb = fieldsB.get(a.getKey());
-                if((fb == null) || !Objects.equals(a.getValue().get(this), fb.get(o))) return false;
-            }
-
-            return true;
-        }
-        catch(Exception ignore) {
-            return false;
-        }
-    }
-
-    public void refresh(boolean deep) {
-        refresh(getSession(), deep);
-    }
-
-    public void refresh() {
-        refresh(true);
-    }
-
-    public void refresh(Session session) {
-        refresh(session, true);
-    }
-
-    public void refresh(Session session, boolean deep) {
-        HibernateUtil.refresh(this, deep);
-    }
-
-    public void saveChanges(boolean deep) {
-        saveChanges(getSession(), deep);
-    }
-
-    public void saveChanges() {
-        saveChanges(true);
-    }
-
-    public void saveChanges(Session session) {
-        saveChanges(session, true);
-    }
-
-    public void saveChanges(Session session, boolean deep) {
-        HibernateUtil.update(session, this, deep);
-    }
-
-    public static Session getSession() {
-        return HibernateUtil.shared().getSession();
-    }
-
-    public @Override int hashCode() {
-        try {
-            int h = 1;
-            for(Map.Entry<String, Field> e : getComparableFields().entrySet()) {
-                Object o = e.getValue().get(this);
-                h = ((31 * h) + ((o == null) ? 0 : o.hashCode()));
-            }
-            return h;
-        }
-        catch(Exception e) {
-            throw new RuntimeException(e);
+    public void delete() {
+        if(!(isNew() || isDeleted())) {
+            withSessionDo((session, tx) -> session.remove(this));
+            setJpaState(JpaState.DELETED);
         }
     }
 
     public @NotNull JpaState getJpaState() {
         return jpaState;
+    }
+
+    public void initialize() {
+        HibernateUtil.initialize(this);
     }
 
     public boolean isDeleted() {
@@ -139,27 +76,23 @@ public class JpaBase {
         return (jpaState == JpaState.NORMAL);
     }
 
-    protected @NotNull Map<String, Field> getComparableFields() {
-        Class<?>           cls    = getClass();
-        Map<String, Field> fields = new TreeMap<>();
-
-        while(cls != null) {
-            for(Field f : cls.getDeclaredFields()) {
-                if(f.isAnnotationPresent(Column.class) && !fields.containsKey(f.getName())) {
-                    fields.put(f.getName(), f);
-                }
-            }
-            cls = cls.getSuperclass();
-        }
-
-        return fields;
+    public void refresh() {
+        HibernateUtil.refresh(this);
     }
 
-    public void setJpaState(@NotNull JpaState jpaState) {
-        this.jpaState = jpaState;
+    public void saveChanges(boolean deep) {
+        HibernateUtil.saveChanges(this, deep);
+    }
+
+    public void saveChanges() {
+        HibernateUtil.saveChanges(this, true);
     }
 
     public void setAsDirty() {
         if(isNormal()) jpaState = JpaState.DIRTY;
+    }
+
+    public void setJpaState(@NotNull JpaState jpaState) {
+        this.jpaState = jpaState;
     }
 }

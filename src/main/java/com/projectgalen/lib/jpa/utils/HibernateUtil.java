@@ -26,173 +26,200 @@ import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
 import com.projectgalen.lib.jpa.utils.errors.SvcConstraintViolation;
-import com.projectgalen.lib.jpa.utils.interfaces.EntityAction;
-import com.projectgalen.lib.jpa.utils.interfaces.TransactionAction;
+import com.projectgalen.lib.jpa.utils.interfaces.EntityDoDelegate;
+import com.projectgalen.lib.jpa.utils.interfaces.QueryDelegate;
+import com.projectgalen.lib.jpa.utils.interfaces.SessionDoDelegate;
+import com.projectgalen.lib.jpa.utils.interfaces.SessionGetDelegate;
 import com.projectgalen.lib.utils.PGProperties;
-import com.projectgalen.lib.utils.concurrency.Locks;
+import com.projectgalen.lib.utils.PGResourceBundle;
+import com.projectgalen.lib.utils.U;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PersistenceException;
+import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.query.Query;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Field;
 import java.sql.SQLIntegrityConstraintViolationException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@SuppressWarnings("unused")
+import static com.projectgalen.lib.utils.U.findNestedCause;
+
+@SuppressWarnings({ "unused", "UnusedReturnValue" })
 public class HibernateUtil {
-    private static final PGProperties  props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
-    private static final ReentrantLock lock  = new ReentrantLock(true);
+    private static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
+    private static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
+    private static final ReentrantLock    lock  = new ReentrantLock(true);
 
-    private final Session session;
+    private HibernateUtil() { }
 
-    private HibernateUtil() {
-        session = getSessionFactory().openSession();
+    public static <T extends JpaBase> void delete(@NotNull T entity) {
+        if(!(entity.isNew() || entity.isDeleted())) {
+            HibernateUtil.withSessionDo((session, tx) -> session.remove(entity));
+            entity.setJpaState(JpaState.DELETED);
+        }
     }
 
-    public Session getSession() {
-        return session;
+    public static @NotNull <T extends JpaBase> List<T> find(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields) {
+        return Objects.requireNonNullElse(HibernateUtil.find(cls, searchFields, searchValues, sortFields, Query::list), new ArrayList<>());
     }
 
-    public static SessionFactory getSessionFactory() {
-        return HOLDER.INSTANCE;
-    }
-
-    public static void refresh(@Nullable JpaBase entity) {
-        if(entity != null) refresh(shared().getSession(), entity, true);
-    }
-
-    public static void refresh(@Nullable JpaBase entity, boolean deep) {
-        if(entity != null) refresh(shared().getSession(), entity, deep);
-    }
-
-    public static void refresh(@NotNull Session session, @NotNull JpaBase entity) {
-        refresh(session, entity, true);
-    }
-
-    public static void refresh(@NotNull Session session, @NotNull JpaBase entity, boolean deep) {
-        Locks.doWithLock(lock, () -> {
-            if(deep) withEachEntity(entity, session::refresh);
-            else session.refresh(entity);
+    public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, @NotNull QueryDelegate<E, R> queryAction) {
+        return HibernateUtil.withSessionGet((session, tx) -> {
+            Query<E> query = session.createQuery(queryString, cls);
+            for(Map.Entry<String, Object> entry : parameters.entrySet()) query.setParameter(entry.getKey(), entry.getValue());
+            return initialize(queryAction.action(query));
         });
     }
 
-    public static HibernateUtil shared() { return HibernateUtilHolder.INSTANCE; }
+    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, @NotNull QueryDelegate<E, R> queryAction) {
+        if(searchFields.length != searchValues.length) throw new IllegalArgumentException(msgs.format("msg.err.fields_values_count_mismatch", searchFields.length, searchValues.length));
 
-    public static void update(@NotNull List<JpaBase> entities) {
-        update(entities, true);
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        StringBuilder       sb         = new StringBuilder().append("from ").append(cls.getSimpleName()).append(" e");
+
+        if(searchFields.length > 0) {
+            parameters.put("VAL0", searchValues[0]);
+            sb.append(" where e.").append(searchFields[0]).append(" = :VAL0");
+
+            for(int i = 1, j = searchFields.length; i < j; i++) {
+                String key = String.format("VAL%d", i);
+                parameters.put(key, searchValues[i]);
+                sb.append(" and e.").append(searchFields[i]).append(" = :").append(key);
+            }
+        }
+
+        if(sortFields.length > 0) {
+            sb.append(" sort by ").append(sortFields[0]);
+            for(int i = 1; i < sortFields.length; i++) sb.append(", ").append(sortFields[i]);
+        }
+
+        String queryString = sb.toString();
+        return find(cls, queryString, parameters, queryAction);
     }
 
-    public static void update(@NotNull List<JpaBase> entities, boolean deep) {
-        for(JpaBase entity : entities) update(shared().getSession(), entity, deep);
+    public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls) {
+        return find(cls, new String[0], new String[0], new String[0]);
     }
 
-    public static void update(@Nullable JpaBase entity) {
-        update(entity, true);
+    public static @Nullable <T extends JpaBase> T get(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields) {
+        return HibernateUtil.find(cls, searchFields, searchValues, sortFields, Query::uniqueResult);
     }
 
-    public static void update(@Nullable JpaBase entity, boolean deep) {
-        if(entity != null) update(shared().getSession(), entity, deep);
+    public static @Nullable <T extends JpaBase> T get(Class<T> cls, @NotNull String searchField, @NotNull Object searchValue) {
+        return get(cls, U.asArray(searchField), U.asArray(searchValue), new String[0]);
     }
 
-    public static void update(@NotNull Session session, @Nullable JpaBase entity, boolean deep) {
-        if(deep) {
-            List<JpaBase> list = new ArrayList<>();
-            withTransaction(session, transaction -> withEachEntity(entity, true, child -> _update(session, child, list)));
-            Locks.doWithLock(lock, () -> {
-                for(JpaBase child : list) {
-                    if(child.getJpaState() != JpaState.NORMAL) child.setJpaState(JpaState.NORMAL);
-                    session.refresh(child);
+    public static <R> R initialize(R results) {
+        if((results != null) && !Hibernate.isInitialized(results)) Hibernate.initialize(results);
+        if(results instanceof Collection) for(Object o : (Collection<?>)results) if(!Hibernate.isInitialized(o)) Hibernate.initialize(o);
+        return results;
+    }
+
+    public static void refresh(@NotNull JpaBase entity) {
+        withSessionDo(((session, tx) -> withEntityDo(entity, session::refresh)));
+    }
+
+    public static void saveChanges(@NotNull JpaBase entity, boolean deep) {
+        withSessionDo((session, tx) -> {
+            if(deep) withEntityDo(entity, child -> saveChanges(session, tx, child));
+            else saveChanges(session, tx, entity);
+            withEntityDo(entity, session::refresh);
+        });
+        if(deep) withEntityDo(true, entity, child -> child.setJpaState(JpaState.NORMAL));
+        else entity.setJpaState(JpaState.NORMAL);
+    }
+
+    public static void saveChanges(@NotNull JpaBase entity) { saveChanges(entity, true); }
+
+    public static void withEntityDo(@NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) { withEntityDo(true, parent, delegate); }
+
+    public static void withEntityDo(boolean parentLast, @NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) {
+        if(!parentLast) delegate.action(parent);
+
+        Reflection.forEachField(parent.getClass(), field -> {
+            if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
+                try {
+                    field.setAccessible(true);
+                    JpaBase child = (JpaBase)field.get(parent);
+                    if(child != null) withEntityDo(parentLast, child, delegate);
                 }
-            });
-        }
-        else update(session, entity);
+                catch(Exception e) {
+                    throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));
+                }
+            }
+            return false;
+        });
+
+        if(parentLast) delegate.action(parent);
     }
 
-    public static void update(@NotNull Session session, @Nullable JpaBase entity) {
-        if((entity != null)) {
-            withTransaction(session, transaction -> _update(session, entity, null));
-            if(entity.getJpaState() != JpaState.NORMAL) entity.setJpaState(JpaState.NORMAL);
-            Locks.doWithLock(lock, () -> session.refresh(entity));
-        }
+    public static void withSessionDo(@NotNull SessionDoDelegate delegate) {
+        withSessionGet((session, tx) -> {
+            delegate.action(session, tx);
+            return null;
+        });
     }
 
-    public static void withEachEntity(@Nullable JpaBase entity, @NotNull EntityAction<JpaBase> action) {
-        withEachEntity(entity, true, action);
-    }
-
-    public static void withEachEntity(@Nullable JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action) {
-        if(entity != null) {
-            if(!parentLast) action.action(entity);
-            Reflection.forEachField(entity.getClass(), field -> traverseChildren(entity, parentLast, action, field));
-            if(parentLast) action.action(entity);
-        }
-    }
-
-    public static void withTransaction(@NotNull Session session, @NotNull TransactionAction delegate) {
-        Locks.doWithLock(lock, () -> {
-            Transaction transaction = session.beginTransaction();
+    public static <R> R withSessionGet(@NotNull SessionGetDelegate<R> delegate) {
+        try(Session session = HibernateSessionFactory.sessionFactory.openSession()) {
+            Transaction tx = session.beginTransaction();
 
             try {
-                if(transaction.isActive()) _rollback(transaction);
-                delegate.action(transaction);
+                R result = delegate.get(session, tx);
                 session.flush();
-                transaction.commit();
+                tx.commit();
+                return result;
             }
-            catch(Exception e) {
-                _rollback(transaction);
-
-                if(((e instanceof PersistenceException) && (e.getCause() instanceof ConstraintViolationException) && (e.getCause().getCause() instanceof SQLIntegrityConstraintViolationException))) {
-                    Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(e.getCause().getCause().getMessage());
-                    if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), ((ConstraintViolationException)e.getCause()).getConstraintName());
-                }
-
-                throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));
-            }
-        });
-    }
-
-    private static void _rollback(Transaction transaction) {
-        try { transaction.rollback(); } catch(Exception e) { e.printStackTrace(System.err); }
-    }
-
-    private static void _update(@NotNull Session session, @NotNull JpaBase entity, List<JpaBase> list) {
-        switch(entity.getJpaState()) {/*@f0*/
-            case NEW:
-            case DELETED: session.persist(entity);
-            case DIRTY:   session.merge(entity);
-        }/*@f1*/
-        if(list != null) list.add(entity);
-    }
-
-    private static boolean traverseChildren(@NotNull JpaBase entity, boolean parentLast, @NotNull EntityAction<JpaBase> action, @NotNull Field field) {
-        if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
-            try {
-                field.setAccessible(true);
-                withEachEntity((JpaBase)field.get(entity), parentLast, action);
-            }
-            catch(Exception e) {
-                throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));
+            catch(Throwable t) {
+                try { tx.rollback(); } catch(Throwable t2) { t2.printStackTrace(System.err); }
+                throw handleErrors(t);
             }
         }
-        return false;
     }
 
-    private static final class HOLDER {
-        private static final SessionFactory INSTANCE = new Configuration().configure().buildSessionFactory();
+    private static RuntimeException handleErrors(Throwable t) {
+        if(t instanceof PersistenceException) {
+            ConstraintViolationException cve = findNestedCause(t, ConstraintViolationException.class);
+            if(cve != null) {
+                SQLIntegrityConstraintViolationException sicve = findNestedCause(cve.getCause(), SQLIntegrityConstraintViolationException.class);
+
+                if(sicve != null) {
+                    Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(sicve.getMessage());
+                    if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), cve.getConstraintName());
+                }
+            }
+            throw (PersistenceException)t;
+        }
+
+        if(t instanceof Error) throw (Error)t;
+        if(t instanceof DaoException) throw (DaoException)t;
+        if(t instanceof RuntimeException) throw (RuntimeException)t;
+        throw new DaoException(t);
     }
 
-    private static final class HibernateUtilHolder {
-        private static final HibernateUtil INSTANCE = new HibernateUtil();
+    private static void saveChanges(@NotNull Session session, @NotNull Transaction tx, @NotNull JpaBase entity) {
+        switch(entity.getJpaState()) {
+            case DELETED:
+            case NEW:
+                session.persist(entity);
+                break;
+            case DIRTY:
+                session.merge(entity);
+                break;
+        }
+    }
+
+    private static final class HibernateSessionFactory {
+        private static final SessionFactory sessionFactory = new Configuration().configure().buildSessionFactory();
     }
 }

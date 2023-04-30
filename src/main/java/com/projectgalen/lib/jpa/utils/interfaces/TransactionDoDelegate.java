@@ -1,11 +1,11 @@
-package com.projectgalen.lib.jpa.utils.base;
+package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
-//     PROJECT: PGBudgetDB
-//    FILENAME: AbstractDao.java
+//     PROJECT: JPAUtils
+//    FILENAME: TransactionAction.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: February 10, 2023
+//        DATE: April 24, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,21 +22,8 @@ package com.projectgalen.lib.jpa.utils.base;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import org.jetbrains.annotations.NotNull;
+import org.hibernate.Transaction;
 
-public class AbstractDao<T extends JpaBase> {
-
-    private final Class<T> entityClass;
-
-    public AbstractDao(@NotNull Class<T> entityClass) {
-        this.entityClass = entityClass;
-    }
-
-    public @NotNull Class<T> getEntityClass() {
-        return entityClass;
-    }
-
-    public @NotNull String getEntityName() {
-        return getEntityClass().getSimpleName();
-    }
+public interface TransactionDoDelegate {
+    void action(Transaction transaction);
 }

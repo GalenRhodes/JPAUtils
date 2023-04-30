@@ -23,7 +23,7 @@ package com.projectgalen.lib.jpa.utils.errors;
 // ===========================================================================
 
 @SuppressWarnings("unused")
-public class SvcConstraintViolation extends RuntimeException {
+public class SvcConstraintViolation extends DaoException {
     private final String data;
     private final String table;
     private final String column;

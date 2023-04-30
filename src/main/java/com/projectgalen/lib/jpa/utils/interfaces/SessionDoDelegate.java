@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: FromEntityAction.java
+//    FILENAME: WithSessionDoDelegate.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: April 21, 2023
+//        DATE: April 28, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,9 +22,10 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.base.JpaBase;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
 import org.jetbrains.annotations.NotNull;
 
-public interface FromEntityAction<R, T extends JpaBase> {
-    R action(@NotNull T entity);
+public interface SessionDoDelegate {
+    void action(@NotNull Session session, @NotNull Transaction tx);
 }
