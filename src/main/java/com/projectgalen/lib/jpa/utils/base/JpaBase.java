@@ -24,17 +24,15 @@ package com.projectgalen.lib.jpa.utils.base;
 
 import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
-import com.projectgalen.lib.utils.PGProperties;
-import com.projectgalen.lib.utils.PGResourceBundle;
+import jakarta.persistence.Transient;
 import org.jetbrains.annotations.NotNull;
 
 import static com.projectgalen.lib.jpa.utils.HibernateUtil.withSessionDo;
 
 @SuppressWarnings("unused")
 public class JpaBase {
-    private static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
-    private static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
 
+    @Transient
     protected JpaState jpaState;
 
     public JpaBase() {
@@ -52,6 +50,7 @@ public class JpaBase {
         }
     }
 
+    @Transient
     public @NotNull JpaState getJpaState() {
         return jpaState;
     }
@@ -60,39 +59,45 @@ public class JpaBase {
         HibernateUtil.initialize(this);
     }
 
+    @Transient
+    public void setJpaState(@NotNull JpaState jpaState) {
+        this.jpaState = jpaState;
+    }
+
+    @Transient
     public boolean isDeleted() {
         return (jpaState == JpaState.DELETED);
     }
 
+    @Transient
     public boolean isDirty() {
         return ((jpaState == JpaState.DIRTY) || isNew());
     }
 
+    @Transient
     public boolean isNew() {
         return (jpaState == JpaState.NEW);
-    }
-
-    public boolean isNormal() {
-        return (jpaState == JpaState.NORMAL);
     }
 
     public void refresh() {
         HibernateUtil.refresh(this);
     }
 
-    public void saveChanges(boolean deep) {
-        HibernateUtil.saveChanges(this, deep);
+    @Transient
+    public boolean isNormal() {
+        return (jpaState == JpaState.NORMAL);
     }
 
-    public void saveChanges() {
-        HibernateUtil.saveChanges(this, true);
+    @Transient
+    public void saveChanges(boolean deep) {
+        HibernateUtil.saveChanges(this, deep);
     }
 
     public void setAsDirty() {
         if(isNormal()) jpaState = JpaState.DIRTY;
     }
 
-    public void setJpaState(@NotNull JpaState jpaState) {
-        this.jpaState = jpaState;
+    public void saveChanges() {
+        saveChanges(true);
     }
 }
