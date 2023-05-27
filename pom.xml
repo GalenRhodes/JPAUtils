@@ -195,7 +195,8 @@
                         <goals>
                             <goal>site</goal>
                         </goals>
-                        <phase>deploy</phase>
+                        <phase>site</phase>
+                        <!--                        <phase>deploy</phase>-->
                     </execution>
                 </executions>
             </plugin>

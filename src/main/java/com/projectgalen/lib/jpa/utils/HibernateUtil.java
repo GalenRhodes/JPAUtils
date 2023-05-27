@@ -214,27 +214,15 @@ public class HibernateUtil {
         return get(cls, wrap(searchField), wrap(searchValue), startingRecord);
     }
 
-    public static <R> R initialize(R results) {
-        if((results != null) && !Hibernate.isInitialized(results)) Hibernate.initialize(results);
-        if(results instanceof Collection) for(Object o : (Collection<?>)results) if(!Hibernate.isInitialized(o)) Hibernate.initialize(o);
-        return results;
+    public static <R> R initialize(R entity) {
+        if((entity != null) && !Hibernate.isInitialized(entity)) Hibernate.initialize(entity);
+        if(entity instanceof Collection) for(Object o : (Collection<?>)entity) initialize(o);
+        return entity;
     }
 
     public static void refresh(@NotNull JpaBase entity) {
         withSessionDo(((session, tx) -> withEntityDo(entity, session::refresh)));
     }
-
-    public static void saveChanges(@NotNull JpaBase entity, boolean deep) {
-        withSessionDo((session, tx) -> {
-            if(deep) withEntityDo(entity, child -> saveChanges(session, tx, child));
-            else saveChanges(session, tx, entity);
-            withEntityDo(entity, session::refresh);
-        });
-        if(deep) withEntityDo(true, entity, child -> child.setJpaState(JpaState.NORMAL));
-        else entity.setJpaState(JpaState.NORMAL);
-    }
-
-    public static void saveChanges(@NotNull JpaBase entity) { saveChanges(entity, true); }
 
     public static void withEntityDo(@NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) { withEntityDo(true, parent, delegate); }
 
@@ -300,18 +288,6 @@ public class HibernateUtil {
         if(t instanceof DaoException) throw (DaoException)t;
         if(t instanceof RuntimeException) throw (RuntimeException)t;
         throw new DaoException(t);
-    }
-
-    private static void saveChanges(@NotNull Session session, @NotNull Transaction tx, @NotNull JpaBase entity) {
-        switch(entity.getJpaState()) {
-            case DELETED:
-            case NEW:
-                session.persist(entity);
-                break;
-            case DIRTY:
-                session.merge(entity);
-                break;
-        }
     }
 
     private static final class HibernateSessionFactory {
