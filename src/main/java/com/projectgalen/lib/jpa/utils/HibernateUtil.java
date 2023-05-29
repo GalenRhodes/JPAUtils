@@ -52,7 +52,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static com.projectgalen.lib.utils.PGArrays.wrap;
-import static com.projectgalen.lib.utils.U.findNestedCause;
+import static com.projectgalen.lib.utils.errors.Errors.findNestedCause;
 
 @SuppressWarnings({ "unused", "UnusedReturnValue" })
 public class HibernateUtil {
