@@ -40,10 +40,6 @@ public abstract class EnumConverter<E extends Enum<E>, T> implements AttributeCo
         this(null);
     }
 
-    public abstract E[] getList();
-
-    public abstract T getValue(@NotNull E attribute);
-
     @Override
     public T convertToDatabaseColumn(E attribute) {
         return ((attribute == null) ? defaultValue : getValue(attribute));
@@ -57,4 +53,8 @@ public abstract class EnumConverter<E extends Enum<E>, T> implements AttributeCo
         if(dbData.equals(defaultValue)) return null;
         throw new IllegalArgumentException(msgs.format("msg.err.not_supported", dbData));
     }
+
+    public abstract E[] getList();
+
+    public abstract T getValue(@NotNull E attribute);
 }
