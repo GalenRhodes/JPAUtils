@@ -55,11 +55,11 @@ public class JpaBase {
     @Transient protected JpaState jpaState;
 
     public JpaBase() {
-        jpaState = NORMAL;
+        jpaState = CURRENT;
     }
 
     public JpaBase(boolean dummy) {
-        jpaState = (dummy ? NORMAL : NEW);
+        jpaState = (dummy ? CURRENT : NEW);
     }
 
     public void delete() {
@@ -96,13 +96,13 @@ public class JpaBase {
     }
 
     @Transient
-    public boolean isNormal() {
-        return (jpaState == NORMAL);
+    public boolean isCurrent() {
+        return (jpaState == CURRENT);
     }
 
     public void refresh() {
         HibernateUtil.refresh(this);
-        setJpaState(NORMAL);
+        setJpaState(CURRENT);
     }
 
     @Transient
@@ -115,7 +115,7 @@ public class JpaBase {
     }
 
     public void setAsDirty() {
-        Locks.doWithLock(lock, () -> { if(jpaState == NORMAL) jpaState = DIRTY; });
+        Locks.doWithLock(lock, () -> { if(jpaState == CURRENT) jpaState = DIRTY; });
     }
 
     @Transient
@@ -143,10 +143,10 @@ public class JpaBase {
     protected void saveChanges(@NotNull Session session, @NotNull Transaction tx, boolean deep) {
         Locks.doWithLock(lock, () -> {
             if(deep) getManyToOneFieldsStream().forEach(f -> saveChild(session, tx, f));
-            if(jpaState != NORMAL) {
+            if(jpaState != CURRENT) {
                 if(jpaState == DIRTY) session.merge(this); else session.persist(this);/*@f0*/
                 if(jpaState != DELETED) session.refresh(this);/*@f1*/
-                jpaState = NORMAL;
+                jpaState = CURRENT;
                 changeMap.clear();
             }
         });

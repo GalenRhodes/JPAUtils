@@ -23,5 +23,5 @@ package com.projectgalen.lib.jpa.utils.enums;
 // ===========================================================================
 
 public enum JpaState {
-    NORMAL, NEW, DIRTY, DELETED
+    CURRENT, NEW, DIRTY, DELETED
 }
