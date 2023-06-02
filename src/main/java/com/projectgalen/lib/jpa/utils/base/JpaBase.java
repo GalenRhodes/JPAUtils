@@ -37,10 +37,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
@@ -82,7 +79,7 @@ public class JpaBase {
     }
 
     public Set<String> getChangedFields() {
-        return Locks.getWithLock(lock, changeMap::keySet);
+        return Locks.getWithLock(lock, () -> Collections.unmodifiableSet(changeMap.keySet()));
     }
 
     @Transient
