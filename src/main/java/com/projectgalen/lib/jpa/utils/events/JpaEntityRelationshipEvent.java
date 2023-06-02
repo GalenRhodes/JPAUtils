@@ -26,16 +26,30 @@ import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import com.projectgalen.lib.utils.U;
 
-public class JpaEntityRelationshipEvent<S extends JpaBase, T extends JpaBase> extends JpaEntityEvent<S> {
-    private final T target;
+import java.util.EventObject;
+
+@SuppressWarnings("unchecked")
+public class JpaEntityRelationshipEvent<S extends JpaBase, T extends JpaBase> extends EventObject {
+    private final T         target;
+    private final EventType eventType;
 
     public JpaEntityRelationshipEvent(S source, T target, EventType eventType) {
-        super(source, eventType);
-        this.target = target;
+        super(source);
         if(!U.isObjIn(eventType, EventType.RelationshipAdded, EventType.RelationshipRemoved)) throw new IllegalArgumentException(HibernateUtil.msgs.format("msg.err.bad_event_type", eventType));
+        this.target    = target;
+        this.eventType = eventType;
+    }
+
+    public EventType getEventType() {
+        return eventType;
     }
 
     public T getTarget() {
         return target;
+    }
+
+    @Override
+    public S getSource() {
+        return (S)super.getSource();
     }
 }

@@ -39,6 +39,7 @@ import org.jetbrains.annotations.Nullable;
 import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -80,6 +81,10 @@ public class JpaBase {
         Locks.doWithLock(lock, () -> Hibernate.initialize(this));
     }
 
+    public Set<String> getChangedFields() {
+        return Locks.getWithLock(lock, changeMap::keySet);
+    }
+
     @Transient
     public boolean isDeleted() {
         return Locks.getWithLock(lock, () -> (jpaState == DELETED));
@@ -101,8 +106,11 @@ public class JpaBase {
     }
 
     public void refresh() {
-        HibernateUtil.refresh(this);
-        setJpaState(CURRENT);
+        Locks.doWithLock(lock, () -> {
+            HibernateUtil.refresh(this);
+            changeMap.clear();
+            jpaState = CURRENT;
+        });
     }
 
     @Transient

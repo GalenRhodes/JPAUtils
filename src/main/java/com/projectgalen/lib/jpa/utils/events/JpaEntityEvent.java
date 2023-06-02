@@ -23,16 +23,30 @@ package com.projectgalen.lib.jpa.utils.events;
 // ===========================================================================
 
 import com.projectgalen.lib.jpa.utils.base.JpaBase;
+import org.jetbrains.annotations.NotNull;
 
+import java.util.Collections;
 import java.util.EventObject;
+import java.util.Set;
+import java.util.TreeSet;
 
 @SuppressWarnings("unchecked")
 public class JpaEntityEvent<S extends JpaBase> extends EventObject {
-    private final EventType eventType;
+    private final EventType   eventType;
+    private final Set<String> changedFields;
 
     public JpaEntityEvent(S source, EventType eventType) {
+        this(source, new TreeSet<>(), eventType);
+    }
+
+    public JpaEntityEvent(S source, @NotNull Set<String> changedFields, EventType eventType) {
         super(source);
-        this.eventType = eventType;
+        this.eventType     = eventType;
+        this.changedFields = Collections.unmodifiableSet(changedFields);
+    }
+
+    public Set<String> getChangedFields() {
+        return changedFields;
     }
 
     public EventType getEventType() {
