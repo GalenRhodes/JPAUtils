@@ -57,7 +57,7 @@ import static com.projectgalen.lib.utils.errors.Errors.findNestedCause;
 @SuppressWarnings({ "unused", "UnusedReturnValue" })
 public class HibernateUtil {
     private static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
-    private static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
+    public static final  PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
     private static final ReentrantLock    lock  = new ReentrantLock(true);
 
     public static final String[] STRNA = new String[0];
