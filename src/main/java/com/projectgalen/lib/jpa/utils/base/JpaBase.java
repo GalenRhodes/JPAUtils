@@ -26,7 +26,6 @@ import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
 import com.projectgalen.lib.utils.Null;
-import com.projectgalen.lib.utils.concurrency.Locks;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Transient;
@@ -37,10 +36,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
-import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.projectgalen.lib.jpa.utils.HibernateUtil.withSessionDo;
@@ -50,9 +48,7 @@ import static com.projectgalen.lib.jpa.utils.enums.JpaState.*;
 public class JpaBase {
 
     protected final @Transient Set<ChangeInfo> changedFields = new TreeSet<>();
-    protected final @Transient ReentrantLock   lock          = new ReentrantLock(true);
-
-    protected @Transient JpaState jpaState;
+    protected @Transient       JpaState        jpaState;
 
     public JpaBase() {
         jpaState = CURRENT;
@@ -63,26 +59,29 @@ public class JpaBase {
     }
 
     public void delete() {
-        Locks.doWithLock(lock, () -> {
-            if((jpaState != NEW) && (jpaState != DELETED)) {
-                withSessionDo((session, tx) -> session.remove(this));
-                jpaState = DELETED;
-            }
-        });
+        if((jpaState != NEW) && (jpaState != DELETED)) {
+            withSessionDo((session, tx) -> session.remove(this));
+            jpaState = DELETED;
+        }
+    }
+
+    @Transient
+    public Stream<ChangeInfo> getChangedFieldStream() {
+        return changedFields.stream();
     }
 
     @Transient
     public Set<ChangeInfo> getChangedFields() {
-        return Locks.getWithLock(lock, () -> Collections.unmodifiableSet(changedFields));
+        return getChangedFieldStream().collect(Collectors.toSet());
     }
 
     @Transient
     public @NotNull JpaState getJpaState() {
-        return Locks.getWithLock(lock, () -> jpaState);
+        return jpaState;
     }
 
     public void initialize() {
-        Locks.doWithLock(lock, () -> Hibernate.initialize(this));
+        Hibernate.initialize(this);
     }
 
     @Transient
@@ -92,25 +91,23 @@ public class JpaBase {
 
     @Transient
     public boolean isDeleted() {
-        return Locks.getWithLock(lock, () -> (jpaState == DELETED));
+        return (jpaState == DELETED);
     }
 
     @Transient
     public boolean isDirty() {
-        return Locks.getWithLock(lock, () -> ((jpaState == DIRTY) || (jpaState == NEW)));
+        return ((jpaState == DIRTY) || (jpaState == NEW));
     }
 
     @Transient
     public boolean isNew() {
-        return Locks.getWithLock(lock, () -> (jpaState == NEW));
+        return (jpaState == NEW);
     }
 
     public void refresh() {
-        Locks.doWithLock(lock, () -> {
-            HibernateUtil.refresh(this);
-            changedFields.clear();
-            jpaState = CURRENT;
-        });
+        HibernateUtil.refresh(this);
+        changedFields.clear();
+        jpaState = CURRENT;
     }
 
     @Transient
@@ -123,12 +120,12 @@ public class JpaBase {
     }
 
     public void setAsDirty() {
-        Locks.doWithLock(lock, () -> { if(jpaState == CURRENT) jpaState = DIRTY; });
+        if(jpaState == CURRENT) jpaState = DIRTY;
     }
 
     @Transient
     public void setJpaState(@NotNull JpaState jpaState) {
-        Locks.doWithLock(lock, () -> this.jpaState = jpaState);
+        this.jpaState = jpaState;
     }
 
     protected void addValueToChangeMap(@NotNull String fieldName, boolean isJpa, @Nullable Object originalValue, @Nullable Object newValue) {
@@ -138,11 +135,10 @@ public class JpaBase {
     }
 
     protected boolean didValueChange(@NotNull String fieldName, boolean isJpa) {
-        return Locks.getWithLock(lock, () -> (findChangeInfo(fieldName, isJpa) != null));
+        return (findChangeInfo(fieldName, isJpa) != null);
     }
 
-    @Nullable
-    protected ChangeInfo findChangeInfo(@NotNull String fieldName, boolean isJpa) {
+    protected @Nullable ChangeInfo findChangeInfo(@NotNull String fieldName, boolean isJpa) {
         return changedFields.stream().filter(o -> (fieldName.equals(o.getFieldName()) && (o.isJpa() == isJpa))).findFirst().orElse(null);
     }
 
@@ -152,19 +148,17 @@ public class JpaBase {
     }
 
     protected @Nullable Object getOriginalValue(@NotNull String fieldName, boolean isJpa) {
-        return Locks.getWithLock(lock, () -> Null.get(findChangeInfo(fieldName, isJpa)));
+        return Null.get(findChangeInfo(fieldName, isJpa));
     }
 
     protected void saveChanges(@NotNull Session session, @NotNull Transaction tx, boolean deep) {
-        Locks.doWithLock(lock, () -> {
-            if(deep) getManyToOneFieldsStream().forEach(f -> saveChild(session, tx, f));
-            if(jpaState != CURRENT) {
-                if(jpaState == DIRTY) session.merge(this); else session.persist(this);/*@f0*/
-                if(jpaState != DELETED) session.refresh(this);/*@f1*/
-                jpaState = CURRENT;
-                changedFields.clear();
-            }
-        });
+        if(deep) getManyToOneFieldsStream().forEach(f -> saveChild(session, tx, f));
+        if(jpaState != CURRENT) {
+            if(jpaState == DIRTY) session.merge(this); else session.persist(this);/*@f0*/
+            if(jpaState != DELETED) session.refresh(this);/*@f1*/
+            jpaState = CURRENT;
+            changedFields.clear();
+        }
     }
 
     private void saveChild(@NotNull Session session, @NotNull Transaction tx, Field field) {
