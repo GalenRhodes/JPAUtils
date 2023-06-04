@@ -25,6 +25,7 @@ package com.projectgalen.lib.jpa.utils.base;
 import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
+import com.projectgalen.lib.jpa.utils.events.EventType;
 import com.projectgalen.lib.utils.Null;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.ManyToOne;
@@ -36,6 +37,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -140,6 +142,16 @@ public class JpaBase {
 
     protected @Nullable ChangeInfo findChangeInfo(@NotNull String fieldName, boolean isJpa) {
         return changedFields.stream().filter(o -> (fieldName.equals(o.getFieldName()) && (o.isJpa() == isJpa))).findFirst().orElse(null);
+    }
+
+    @Transient
+    protected @NotNull Set<String> getChangedFieldNamesForEvent() {
+        return ((getJpaState() == JpaState.DIRTY) ? getChangedFields().stream().filter(o -> !o.isJpa()).map(ChangeInfo::getFieldName).collect(Collectors.toSet()) : Collections.emptySet());
+    }
+
+    @Transient
+    protected @NotNull EventType getEventType() {
+        return (getJpaState() == JpaState.NEW) ? EventType.Added : ((getJpaState() == JpaState.DELETED) ? EventType.Removed : EventType.Updated);
     }
 
     @Transient
