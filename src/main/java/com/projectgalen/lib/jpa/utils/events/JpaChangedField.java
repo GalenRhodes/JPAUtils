@@ -22,63 +22,74 @@ package com.projectgalen.lib.jpa.utils.events;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
+import com.projectgalen.lib.jpa.utils.base.JpaBase;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
 @SuppressWarnings("unused")
-public class JpaChangedField<T> implements Comparable<JpaChangedField<T>> {
+public class JpaChangedField implements Comparable<JpaChangedField> {
 
-    public final @NotNull  String  fieldName;
-    public final           boolean isJpa;
-    public final @Nullable T       oldValue;
-    public @Nullable       T       newValue;
+    public final @NotNull  String   fieldName;
+    public final @NotNull  Class<?> fieldType;
+    public final @Nullable Object   oldValue;
+    public @Nullable       Object   newValue;
 
-    public JpaChangedField(@NotNull String fieldName, boolean isJpa, @Nullable T oldValue, @Nullable T newValue) {
+    public JpaChangedField(@NotNull String fieldName, @NotNull Class<?> fieldType, @Nullable Object oldValue, @Nullable Object newValue) {
         this.fieldName = fieldName;
+        this.fieldType = fieldType;
         this.oldValue  = oldValue;
         this.newValue  = newValue;
-        this.isJpa     = isJpa;
     }
 
     @Override
-    public int compareTo(@NotNull JpaChangedField<T> o) {
+    public int compareTo(@NotNull JpaChangedField o) {
         int cc = fieldName.compareTo(o.fieldName);
-        return ((cc == 0) ? Boolean.compare(isJpa, o.isJpa) : cc);
+        return ((cc == 0) ? fieldType.getName().compareTo(o.fieldType.getName()) : cc);
+    }
+
+    public boolean equals(@NotNull String fieldName, @NotNull Class<?> fieldType) {
+        return (fieldName.equals(this.fieldName) && (fieldType == this.fieldType));
     }
 
     @Override
     public boolean equals(Object o) {
-        return ((this == o) || ((o instanceof JpaChangedField) && _equals((JpaChangedField<?>)o)));
+        return ((this == o) || ((o instanceof JpaChangedField) && _equals((JpaChangedField)o)));
+    }
+
+    public @NotNull Class<?> getFieldType() {
+        return fieldType;
     }
 
     public @NotNull String getFieldName() {
         return fieldName;
     }
 
-    public @Nullable T getNewValue() {
+    public @Nullable Object getNewValue() {
         return newValue;
     }
 
-    public @Nullable T getOldValue() {
+    public @Nullable Object getOldValue() {
         return oldValue;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(fieldName, isJpa);
+        return Objects.hash(fieldName, fieldType);
     }
 
     public boolean isJpa() {
-        return isJpa;
+        return JpaBase.class.isAssignableFrom(fieldType);
     }
 
-    public void setNewValue(@Nullable T newValue) {
+    public void setNewValue(@Nullable Object newValue) {
         this.newValue = newValue;
     }
 
-    private boolean _equals(JpaChangedField<?> oo) {
-        return (Objects.equals(fieldName, oo.fieldName) && (isJpa == oo.isJpa));
+    @Contract(pure = true)
+    private boolean _equals(@NotNull JpaChangedField o) {
+        return (Objects.equals(fieldName, o.fieldName) && (fieldType == o.fieldType));
     }
 }

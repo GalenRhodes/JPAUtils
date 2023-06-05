@@ -24,37 +24,54 @@ package com.projectgalen.lib.jpa.utils.events;
 
 import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.EventObject;
-import java.util.Set;
-import java.util.TreeSet;
 
-@SuppressWarnings("unchecked")
-public class JpaEntityEvent<S extends JpaBase> extends EventObject {
-    private final EventType               eventType;
-    private final Set<JpaChangedField<?>> changedFields;
+@SuppressWarnings("unused")
+public class JpaEntityFieldEvent extends EventObject {
 
-    public JpaEntityEvent(S source, EventType eventType) {
-        this(source, new TreeSet<>(), eventType);
-    }
+    private final           EventType eventType;
+    private final @NotNull  String    fieldName;
+    private final @NotNull  Class<?>  fieldType;
+    private final @Nullable Object    oldValue;
+    private @Nullable       Object    newValue;
 
-    public JpaEntityEvent(S source, @NotNull Set<JpaChangedField<?>> changedFields, EventType eventType) {
+    public JpaEntityFieldEvent(JpaBase source, @NotNull JpaChangedField changedField, EventType eventType) {
         super(source);
-        this.eventType     = eventType;
-        this.changedFields = Collections.unmodifiableSet(changedFields);
-    }
-
-    public Set<JpaChangedField<?>> getChangedFields() {
-        return changedFields;
+        this.eventType = eventType;
+        this.fieldName = changedField.fieldName;
+        this.fieldType = changedField.fieldType;
+        this.oldValue  = changedField.oldValue;
+        this.newValue  = changedField.newValue;
     }
 
     public EventType getEventType() {
         return eventType;
     }
 
+    public @NotNull String getFieldName() {
+        return fieldName;
+    }
+
+    public @NotNull Class<?> getFieldType() {
+        return fieldType;
+    }
+
+    public @Nullable Object getNewValue() {
+        return newValue;
+    }
+
+    public @Nullable Object getOldValue() {
+        return oldValue;
+    }
+
     @Override
-    public S getSource() {
-        return (S)super.getSource();
+    public JpaBase getSource() {
+        return (JpaBase)super.getSource();
+    }
+
+    public void setNewValue(@Nullable Object newValue) {
+        this.newValue = newValue;
     }
 }

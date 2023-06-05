@@ -22,11 +22,10 @@ package com.projectgalen.lib.jpa.utils.events;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.EventListener;
 
-public interface JpaEntityListener<S extends JpaBase> extends EventListener {
-    void handleEntityEvent(@NotNull JpaEntityEvent<S> event);
+public interface JpaEntityFieldListener extends EventListener {
+    void handleEntityEvent(@NotNull JpaEntityFieldEvent event);
 }

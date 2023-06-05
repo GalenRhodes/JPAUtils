@@ -28,18 +28,19 @@ import com.projectgalen.lib.utils.U;
 
 import java.util.EventObject;
 
-@SuppressWarnings("unchecked")
-public class JpaEntityRelationshipEvent<S extends JpaBase, T extends JpaBase> extends EventObject {
-    private final String    fieldName;
-    private final T         target;
-    private final EventType eventType;
+public class JpaEntityRelationshipEvent extends EventObject {
+    private final String                   fieldName;
+    private final Class<? extends JpaBase> targetClass;
+    private final JpaBase                  target;
+    private final EventType                eventType;
 
-    public JpaEntityRelationshipEvent(String fieldName, S source, T target, EventType eventType) {
+    public JpaEntityRelationshipEvent(String fieldName, JpaBase source, Class<? extends JpaBase> targetClass, JpaBase target, EventType eventType) {
         super(source);
         if(!U.isObjIn(eventType, EventType.RelationshipAdded, EventType.RelationshipRemoved)) throw new IllegalArgumentException(HibernateUtil.msgs.format("msg.err.bad_event_type", eventType));
-        this.fieldName = fieldName;
-        this.target    = target;
-        this.eventType = eventType;
+        this.fieldName   = fieldName;
+        this.target      = target;
+        this.targetClass = targetClass;
+        this.eventType   = eventType;
     }
 
     public String getFieldName() {
@@ -50,12 +51,16 @@ public class JpaEntityRelationshipEvent<S extends JpaBase, T extends JpaBase> ex
         return eventType;
     }
 
-    public T getTarget() {
+    @Override
+    public JpaBase getSource() {
+        return (JpaBase)super.getSource();
+    }
+
+    public JpaBase getTarget() {
         return target;
     }
 
-    @Override
-    public S getSource() {
-        return (S)super.getSource();
+    public Class<? extends JpaBase> getTargetClass() {
+        return targetClass;
     }
 }

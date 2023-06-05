@@ -25,8 +25,7 @@ package com.projectgalen.lib.jpa.utils.base;
 import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
-import com.projectgalen.lib.jpa.utils.events.EventType;
-import com.projectgalen.lib.jpa.utils.events.JpaChangedField;
+import com.projectgalen.lib.jpa.utils.events.*;
 import com.projectgalen.lib.utils.Null;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.ManyToOne;
@@ -38,19 +37,21 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.projectgalen.lib.jpa.utils.HibernateUtil.withSessionDo;
 import static com.projectgalen.lib.jpa.utils.enums.JpaState.*;
 
-@SuppressWarnings({ "unused" })
+@SuppressWarnings("unused")
 public class JpaBase {
 
-    protected final @Transient Set<JpaChangedField<?>> changedFields = new TreeSet<>();
-    protected @Transient       JpaState                jpaState;
+    protected final @Transient JpaFieldListenerList        fieldEventListeners        = new JpaFieldListenerList();
+    protected final @Transient JpaRelationshipListenerList relationshipEventListeners = new JpaRelationshipListenerList();
+    protected final @Transient Set<JpaChangedField>        changedFields              = new TreeSet<>();
+
+    protected @Transient JpaState jpaState;
 
     public JpaBase() {
         jpaState = CURRENT;
@@ -58,6 +59,11 @@ public class JpaBase {
 
     public JpaBase(boolean dummy) {
         jpaState = (dummy ? CURRENT : NEW);
+    }
+
+    @Transient
+    public void addFieldEventListener(@Nullable String fieldName, @Nullable Class<?> fieldType, @NotNull JpaEntityFieldListener listener) {
+        fieldEventListeners.addListener(listener, fieldName, fieldType);
     }
 
     public void delete() {
@@ -68,12 +74,12 @@ public class JpaBase {
     }
 
     @Transient
-    public Stream<JpaChangedField<?>> getChangedFieldStream() {
+    public Stream<JpaChangedField> getChangedFieldStream() {
         return changedFields.stream();
     }
 
     @Transient
-    public Set<JpaChangedField<?>> getChangedFields() {
+    public Set<JpaChangedField> getChangedFields() {
         return getChangedFieldStream().collect(Collectors.toSet());
     }
 
@@ -113,8 +119,25 @@ public class JpaBase {
     }
 
     @Transient
+    public void removeFieldEventListener(@Nullable String fieldName, @Nullable Class<?> fieldType, @NotNull JpaEntityFieldListener listener) {
+        fieldEventListeners.removeListener(listener, fieldName, fieldType);
+    }
+
+    @Transient
     public void saveChanges(boolean deep) {
-        HibernateUtil.withSessionDo((session, tx) -> saveChanges(session, tx, deep));
+        if(getJpaState() != JpaState.CURRENT) {
+            // Do this before we actually save so we capture the changed fields.
+            List<JpaEntityFieldEvent>        fldEvents = getFieldEvent();
+            List<JpaEntityRelationshipEvent> relEvents = getEntityRelationshipEvents();
+            // Now save the data.
+            HibernateUtil.withSessionDo((session, tx) -> saveChanges(session, tx, deep));
+            // Finally, fire the events.
+            fldEvents.forEach(fieldEventListeners::fireEntityEvent);
+            relEvents.forEach(relationshipEventListeners::fireRelationshipEvent);
+        }
+        else if(deep) {
+            HibernateUtil.withSessionDo((session, tx) -> getManyToOneFieldsStream().forEach(f -> saveChild(session, tx, f)));
+        }
     }
 
     public void saveChanges() {
@@ -130,25 +153,35 @@ public class JpaBase {
         this.jpaState = jpaState;
     }
 
-    @SuppressWarnings("unchecked")
-    protected void addValueToChangeMap(@NotNull String fieldName, boolean isJpa, @Nullable Object originalValue, @Nullable Object newValue) {
-        JpaChangedField<? super Object> ci = (JpaChangedField<? super Object>)findChangeInfo(fieldName, isJpa);
-        if(ci == null) changedFields.add(new JpaChangedField<>(fieldName, isJpa, originalValue, newValue));
+    protected void addValueToChangeMap(@NotNull String fieldName, @NotNull Class<?> fieldType, @Nullable Object originalValue, @Nullable Object newValue) {
+        JpaChangedField ci = findChangeInfo(fieldName, fieldType);
+        if(ci == null) changedFields.add(new JpaChangedField(fieldName, fieldType, originalValue, newValue));
         else ci.setNewValue(newValue);
     }
 
-    protected boolean didValueChange(@NotNull String fieldName, boolean isJpa) {
-        return (findChangeInfo(fieldName, isJpa) != null);
+    protected boolean didValueChange(@NotNull String fieldName, @NotNull Class<?> fieldType) {
+        return changedFields.stream().anyMatch(o -> o.equals(fieldName, fieldType));
     }
 
-    protected @Nullable JpaChangedField<?> findChangeInfo(@NotNull String fieldName, boolean isJpa) {
-        return changedFields.stream().filter(o -> (o.getFieldName().equals(fieldName) && o.isJpa() == isJpa)).findFirst().orElse(null);
+    protected @Nullable JpaChangedField findChangeInfo(@NotNull String fieldName, @NotNull Class<?> fieldType) {
+        return changedFields.stream().filter(o -> o.equals(fieldName, fieldType)).findFirst().orElse(null);
     }
 
     @Transient
-    protected @NotNull Set<JpaChangedField<?>> getChangedFieldsForEvent() {
-        if(getJpaState() == CURRENT) return new TreeSet<>();
-        return changedFields.stream().filter(JpaChangedField::isJpa).collect(Collectors.toSet());
+    protected @NotNull Set<JpaChangedField> getChangedFieldsForEvent() {
+        return ((getJpaState() == CURRENT) ? new TreeSet<>() : changedFields.stream().filter(JpaChangedField::isJpa).collect(Collectors.toSet()));
+    }
+
+    @Transient
+    protected @NotNull List<JpaEntityRelationshipEvent> getEntityRelationshipEvents() {
+        List<JpaEntityRelationshipEvent> events = new ArrayList<>();
+        getChangedFields().stream().filter(f -> f.isJpa() && !Objects.equals(f.getOldValue(), f.getNewValue())).forEach(f -> {
+            JpaBase o = (JpaBase)f.getOldValue();
+            JpaBase n = (JpaBase)f.getNewValue();
+            if(o != null) events.add(new JpaEntityRelationshipEvent(f.getFieldName(), this, o.getClass(), o, EventType.RelationshipRemoved));
+            if(n != null) events.add(new JpaEntityRelationshipEvent(f.getFieldName(), this, n.getClass(), n, EventType.RelationshipAdded));
+        });
+        return events;
     }
 
     @Transient
@@ -157,12 +190,17 @@ public class JpaBase {
     }
 
     @Transient
+    protected @NotNull List<JpaEntityFieldEvent> getFieldEvent() {
+        return changedFields.stream().filter(f -> !f.isJpa()).map(f -> new JpaEntityFieldEvent(this, f, getEventType())).collect(Collectors.toList());
+    }
+
+    @Transient
     protected @NotNull Stream<Field> getManyToOneFieldsStream() {
         return Reflection.getFieldsWithAnyAnnotation(getClass(), ManyToOne.class).stream().filter(f -> JpaBase.class.isAssignableFrom(f.getType()));
     }
 
-    protected @Nullable Object getOriginalValue(@NotNull String fieldName, boolean isJpa) {
-        return Null.get(findChangeInfo(fieldName, isJpa));
+    protected @Nullable Object getOriginalValue(@NotNull String fieldName, @NotNull Class<?> fieldType) {
+        return Null.get(findChangeInfo(fieldName, fieldType));
     }
 
     protected void saveChanges(@NotNull Session session, @NotNull Transaction tx, boolean deep) {
@@ -171,17 +209,12 @@ public class JpaBase {
             if(jpaState == DIRTY) session.merge(this); else session.persist(this);/*@f0*/
             if(jpaState != DELETED) session.refresh(this);/*@f1*/
             jpaState = CURRENT;
-            changedFields.clear();
         }
+        changedFields.clear();
     }
 
     private void saveChild(@NotNull Session session, @NotNull Transaction tx, Field field) {
-        try {
-            field.setAccessible(true);
-            Null.doIfNotNull((JpaBase)field.get(this), o -> o.saveChanges(session, tx, true));
-        }
-        catch(Exception e) {
-            throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));
-        }
+        try { Null.doIfNotNull(((JpaBase)Reflection.getFieldValue(field, this)), o -> o.saveChanges(session, tx, true)); }
+        catch(Exception e) { throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e)); }
     }
 }

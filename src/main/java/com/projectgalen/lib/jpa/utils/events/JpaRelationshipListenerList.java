@@ -24,28 +24,56 @@ package com.projectgalen.lib.jpa.utils.events;
 
 import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.*;
 
-@SuppressWarnings("unchecked")
-public final class JpaRelationshipListenerList<S extends JpaBase, T extends JpaBase> {
+@SuppressWarnings("unused")
+public final class JpaRelationshipListenerList {
 
-    private final Set<JpaEntityRelationshipListener<S, T>> listeners = new LinkedHashSet<>();
+    private final Set<ListenerItem> listeners = new LinkedHashSet<>();
 
     public JpaRelationshipListenerList() { }
 
-    public void addListener(@NotNull JpaEntityRelationshipListener<S, T> listener) { synchronized(listeners) { listeners.add(listener); } }
+    public void addListener(@NotNull JpaEntityRelationshipListener listener, @Nullable String sourceFieldName, @Nullable Class<? extends JpaBase> targetClass, EventType... eventTypess) {
+        synchronized(listeners) { listeners.add(new ListenerItem(listener, sourceFieldName, targetClass, eventTypess)); }
+    }
 
-    public void fireEntityRelationshipEvent(@NotNull JpaEntityRelationshipEvent<S, T> event) { getListenerStream().forEach(l -> l.handleEntityRelationshipEvent(event)); }
+    public void fireRelationshipEvent(@NotNull JpaEntityRelationshipEvent event) {
+        synchronized(listeners) {
+            listeners.stream().filter(l -> l.matches(event.getFieldName(), event.getTargetClass(), event.getEventType())).forEach(l -> l.listener.handleEntityRelationshipEvent(event));
+        }
+    }
 
-    public @NotNull Set<JpaEntityRelationshipListener<S, T>> getListenerSet() { synchronized(listeners) { return getListenerStream().collect(Collectors.toSet()); } }
+    public void removeListener(@NotNull JpaEntityRelationshipListener listener, @Nullable String sourceFieldName, @Nullable Class<? extends JpaBase> targetClass, EventType... eventTypes) {
+        synchronized(listeners) { listeners.removeIf(l -> l.matches(listener, sourceFieldName, targetClass, eventTypes)); }
+    }
 
-    public @NotNull JpaEntityRelationshipListener<S, T> @NotNull [] getListeners() { synchronized(listeners) { return getListenerStream().toArray(JpaEntityRelationshipListener[]::new); } }
+    private static final class ListenerItem {
 
-    public void removeListener(@NotNull Class<S> entityClass, @NotNull JpaEntityRelationshipListener<S, T> listener) { synchronized(listeners) { listeners.remove(listener); } }
+        public final @NotNull  JpaEntityRelationshipListener listener;
+        public final @Nullable String                        fieldName;
+        public final @Nullable Class<? extends JpaBase>      targetClass;
+        public final @NotNull  Set<EventType>                eventTypes;
 
-    private @NotNull Stream<JpaEntityRelationshipListener<S, T>> getListenerStream() { return listeners.stream(); }
+        public ListenerItem(@NotNull JpaEntityRelationshipListener listener, @Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, EventType[] eventTypes) {
+            this.listener    = listener;
+            this.fieldName   = fieldName;
+            this.targetClass = targetClass;
+            this.eventTypes  = new HashSet<>(Arrays.asList(eventTypes));
+        }
+
+        public boolean matches(@Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, EventType eventType) {
+            return (((this.fieldName == null) || this.fieldName.equals(fieldName))/*@f0*/
+                    && ((this.targetClass == null) || (this.targetClass == targetClass))
+                    && (eventTypes.isEmpty() || eventTypes.contains(eventType)));
+        }/*@f1*/
+
+        public boolean matches(@NotNull JpaEntityRelationshipListener listener, @Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, EventType[] eventTypes) {
+            return (this.listener.equals(listener)
+                    && Objects.equals(this.fieldName, fieldName)
+                    && Objects.equals(this.targetClass, targetClass)
+                    && this.eventTypes.equals(new HashSet<>(Arrays.asList(eventTypes))));
+        }
+    }
 }
