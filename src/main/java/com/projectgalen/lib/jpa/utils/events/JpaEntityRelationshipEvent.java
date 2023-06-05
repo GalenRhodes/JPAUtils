@@ -30,14 +30,20 @@ import java.util.EventObject;
 
 @SuppressWarnings("unchecked")
 public class JpaEntityRelationshipEvent<S extends JpaBase, T extends JpaBase> extends EventObject {
+    private final String    fieldName;
     private final T         target;
     private final EventType eventType;
 
-    public JpaEntityRelationshipEvent(S source, T target, EventType eventType) {
+    public JpaEntityRelationshipEvent(String fieldName, S source, T target, EventType eventType) {
         super(source);
         if(!U.isObjIn(eventType, EventType.RelationshipAdded, EventType.RelationshipRemoved)) throw new IllegalArgumentException(HibernateUtil.msgs.format("msg.err.bad_event_type", eventType));
+        this.fieldName = fieldName;
         this.target    = target;
         this.eventType = eventType;
+    }
+
+    public String getFieldName() {
+        return fieldName;
     }
 
     public EventType getEventType() {

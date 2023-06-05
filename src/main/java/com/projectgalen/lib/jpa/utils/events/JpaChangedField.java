@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.events;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: JpaEntityEvent.java
+//    FILENAME: JpaChangedField.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: June 02, 2023
+//        DATE: June 04, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,39 +22,47 @@ package com.projectgalen.lib.jpa.utils.events;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
-import java.util.EventObject;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.Objects;
 
-@SuppressWarnings("unchecked")
-public class JpaEntityEvent<S extends JpaBase> extends EventObject {
-    private final EventType               eventType;
-    private final Set<JpaChangedField<?>> changedFields;
+@SuppressWarnings("unused")
+public class JpaChangedField<T> implements Comparable<JpaChangedField<T>> {
+    public final @NotNull  String fieldName;
+    public final @Nullable T      oldValue;
+    public final @Nullable T      newValue;
 
-    public JpaEntityEvent(S source, EventType eventType) {
-        this(source, new TreeSet<>(), eventType);
-    }
-
-    public JpaEntityEvent(S source, @NotNull Set<JpaChangedField<?>> changedFields, EventType eventType) {
-        super(source);
-        this.eventType     = eventType;
-        this.changedFields = Collections.unmodifiableSet(changedFields);
-    }
-
-    public Set<JpaChangedField<?>> getChangedFields() {
-        return changedFields;
-    }
-
-    public EventType getEventType() {
-        return eventType;
+    public JpaChangedField(@NotNull String fieldName, @Nullable T oldValue, @Nullable T newValue) {
+        this.fieldName = fieldName;
+        this.oldValue  = oldValue;
+        this.newValue  = newValue;
     }
 
     @Override
-    public S getSource() {
-        return (S)super.getSource();
+    public int compareTo(@NotNull JpaChangedField<T> o) {
+        return fieldName.compareTo(o.fieldName);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return ((this == o) || ((o instanceof JpaChangedField) && Objects.equals(fieldName, ((JpaChangedField<?>)o).fieldName)));
+    }
+
+    public @NotNull String getFieldName() {
+        return fieldName;
+    }
+
+    public @Nullable T getNewValue() {
+        return newValue;
+    }
+
+    public @Nullable T getOldValue() {
+        return oldValue;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(fieldName);
     }
 }

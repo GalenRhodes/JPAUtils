@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.events;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: JpaListenerList.java
+//    FILENAME: JpaRelationshipListenerList.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: June 02, 2023
+//        DATE: June 04, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -31,20 +31,21 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @SuppressWarnings("unchecked")
-public final class JpaListenerList<S extends JpaBase> {
-    private final Set<JpaEntityListener<S>> listeners = new LinkedHashSet<>();
+public final class JpaRelationshipListenerList<S extends JpaBase, T extends JpaBase> {
 
-    public JpaListenerList() { }
+    private final Set<JpaEntityRelationshipListener<S, T>> listeners = new LinkedHashSet<>();
 
-    public void addListener(@NotNull JpaEntityListener<S> listener) { synchronized(listeners) { listeners.add(listener); } }
+    public JpaRelationshipListenerList() { }
 
-    public void fireEntityEvent(@NotNull JpaEntityEvent<S> event) { getListenerStream().forEach(l -> l.handleEntityEvent(event)); }
+    public void addListener(@NotNull JpaEntityRelationshipListener<S, T> listener) { synchronized(listeners) { listeners.add(listener); } }
 
-    public @NotNull Set<JpaEntityListener<S>> getListenerSet() { synchronized(listeners) { return getListenerStream().collect(Collectors.toSet()); } }
+    public void fireEntityRelationshipEvent(@NotNull JpaEntityRelationshipEvent<S, T> event) { getListenerStream().forEach(l -> l.handleEntityRelationshipEvent(event)); }
 
-    public @NotNull JpaEntityListener<S> @NotNull [] getListeners() { synchronized(listeners) { return getListenerStream().toArray(JpaEntityListener[]::new); } }
+    public @NotNull Set<JpaEntityRelationshipListener<S, T>> getListenerSet() { synchronized(listeners) { return getListenerStream().collect(Collectors.toSet()); } }
 
-    public void removeListener(@NotNull JpaEntityListener<S> listener) { synchronized(listeners) { listeners.remove(listener); } }
+    public @NotNull JpaEntityRelationshipListener<S, T> @NotNull [] getListeners() { synchronized(listeners) { return getListenerStream().toArray(JpaEntityRelationshipListener[]::new); } }
 
-    private @NotNull Stream<JpaEntityListener<S>> getListenerStream() { return listeners.stream(); }
+    public void removeListener(@NotNull Class<S> entityClass, @NotNull JpaEntityRelationshipListener<S, T> listener) { synchronized(listeners) { listeners.remove(listener); } }
+
+    private @NotNull Stream<JpaEntityRelationshipListener<S, T>> getListenerStream() { return listeners.stream(); }
 }
