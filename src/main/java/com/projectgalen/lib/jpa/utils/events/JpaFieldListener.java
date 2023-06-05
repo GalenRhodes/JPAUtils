@@ -2,7 +2,7 @@ package com.projectgalen.lib.jpa.utils.events;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: JpaEntityRelationshipListener.java
+//    FILENAME: JpaEntityListener.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
 //        DATE: June 02, 2023
@@ -26,6 +26,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.EventListener;
 
-public interface JpaEntityRelationshipListener extends EventListener {
-    void handleEntityRelationshipEvent(@NotNull JpaEntityRelationshipEvent event);
+public interface JpaFieldListener extends EventListener {
+    void handleEntityEvent(@NotNull JpaFieldEvent event);
 }

@@ -49,7 +49,7 @@ public class JpaBase {
 
     protected final @Transient JpaFieldListenerList        fieldEventListeners        = new JpaFieldListenerList();
     protected final @Transient JpaRelationshipListenerList relationshipEventListeners = new JpaRelationshipListenerList();
-    protected final @Transient Set<JpaChangedField>        changedFields              = new TreeSet<>();
+    protected final @Transient Set<ChangedField>           changedFields              = new TreeSet<>();
 
     protected @Transient JpaState jpaState;
 
@@ -62,8 +62,12 @@ public class JpaBase {
     }
 
     @Transient
-    public void addFieldEventListener(@Nullable String fieldName, @Nullable Class<?> fieldType, @NotNull JpaEntityFieldListener listener) {
-        fieldEventListeners.addListener(listener, fieldName, fieldType);
+    public void addFieldEventListener(@NotNull JpaFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldClass, JpaEventType... eventTypes) {
+        fieldEventListeners.addListener(listener, fieldName, fieldClass, eventTypes);
+    }
+
+    public void addRelationshipEventListener(@NotNull JpaRelationshipListener listener, @Nullable String sourceFieldName, @Nullable Class<? extends JpaBase> targetClass, JpaEventType... eventTypes) {
+        relationshipEventListeners.addListener(listener, sourceFieldName, targetClass, eventTypes);
     }
 
     public void delete() {
@@ -74,12 +78,12 @@ public class JpaBase {
     }
 
     @Transient
-    public Stream<JpaChangedField> getChangedFieldStream() {
+    public Stream<ChangedField> getChangedFieldStream() {
         return changedFields.stream();
     }
 
     @Transient
-    public Set<JpaChangedField> getChangedFields() {
+    public Set<ChangedField> getChangedFields() {
         return getChangedFieldStream().collect(Collectors.toSet());
     }
 
@@ -119,16 +123,16 @@ public class JpaBase {
     }
 
     @Transient
-    public void removeFieldEventListener(@Nullable String fieldName, @Nullable Class<?> fieldType, @NotNull JpaEntityFieldListener listener) {
-        fieldEventListeners.removeListener(listener, fieldName, fieldType);
+    public void removeFieldEventListener(@Nullable String fieldName, @Nullable Class<?> fieldType, @NotNull JpaFieldListener listener, JpaEventType... eventTypes) {
+        fieldEventListeners.removeListener(listener, fieldName, fieldType, eventTypes);
     }
 
     @Transient
     public void saveChanges(boolean deep) {
         if(getJpaState() != JpaState.CURRENT) {
             // Do this before we actually save so we capture the changed fields.
-            List<JpaEntityFieldEvent>        fldEvents = getFieldEvent();
-            List<JpaEntityRelationshipEvent> relEvents = getEntityRelationshipEvents();
+            List<JpaFieldEvent>        fldEvents = getFieldEvent();
+            List<JpaRelationshipEvent> relEvents = getEntityRelationshipEvents();
             // Now save the data.
             HibernateUtil.withSessionDo((session, tx) -> saveChanges(session, tx, deep));
             // Finally, fire the events.
@@ -154,8 +158,8 @@ public class JpaBase {
     }
 
     protected void addValueToChangeMap(@NotNull String fieldName, @NotNull Class<?> fieldType, @Nullable Object originalValue, @Nullable Object newValue) {
-        JpaChangedField ci = findChangeInfo(fieldName, fieldType);
-        if(ci == null) changedFields.add(new JpaChangedField(fieldName, fieldType, originalValue, newValue));
+        ChangedField ci = findChangeInfo(fieldName, fieldType);
+        if(ci == null) changedFields.add(new ChangedField(fieldName, fieldType, originalValue, newValue));
         else ci.setNewValue(newValue);
     }
 
@@ -163,35 +167,35 @@ public class JpaBase {
         return changedFields.stream().anyMatch(o -> o.equals(fieldName, fieldType));
     }
 
-    protected @Nullable JpaChangedField findChangeInfo(@NotNull String fieldName, @NotNull Class<?> fieldType) {
+    protected @Nullable ChangedField findChangeInfo(@NotNull String fieldName, @NotNull Class<?> fieldType) {
         return changedFields.stream().filter(o -> o.equals(fieldName, fieldType)).findFirst().orElse(null);
     }
 
     @Transient
-    protected @NotNull Set<JpaChangedField> getChangedFieldsForEvent() {
-        return ((getJpaState() == CURRENT) ? new TreeSet<>() : changedFields.stream().filter(JpaChangedField::isJpa).collect(Collectors.toSet()));
+    protected @NotNull Set<ChangedField> getChangedFieldsForEvent() {
+        return ((getJpaState() == CURRENT) ? new TreeSet<>() : changedFields.stream().filter(ChangedField::isJpa).collect(Collectors.toSet()));
     }
 
     @Transient
-    protected @NotNull List<JpaEntityRelationshipEvent> getEntityRelationshipEvents() {
-        List<JpaEntityRelationshipEvent> events = new ArrayList<>();
+    protected @NotNull List<JpaRelationshipEvent> getEntityRelationshipEvents() {
+        List<JpaRelationshipEvent> events = new ArrayList<>();
         getChangedFields().stream().filter(f -> f.isJpa() && !Objects.equals(f.getOldValue(), f.getNewValue())).forEach(f -> {
             JpaBase o = (JpaBase)f.getOldValue();
             JpaBase n = (JpaBase)f.getNewValue();
-            if(o != null) events.add(new JpaEntityRelationshipEvent(f.getFieldName(), this, o.getClass(), o, EventType.RelationshipRemoved));
-            if(n != null) events.add(new JpaEntityRelationshipEvent(f.getFieldName(), this, n.getClass(), n, EventType.RelationshipAdded));
+            if(o != null) events.add(new JpaRelationshipEvent(f.getFieldName(), this, o.getClass(), o, JpaEventType.RelationshipRemoved));
+            if(n != null) events.add(new JpaRelationshipEvent(f.getFieldName(), this, n.getClass(), n, JpaEventType.RelationshipAdded));
         });
         return events;
     }
 
     @Transient
-    protected @NotNull EventType getEventType() {
-        return (getJpaState() == JpaState.NEW) ? EventType.Added : ((getJpaState() == JpaState.DELETED) ? EventType.Removed : EventType.Updated);
+    protected @NotNull JpaEventType getEventType() {
+        return (getJpaState() == JpaState.NEW) ? JpaEventType.Added : ((getJpaState() == JpaState.DELETED) ? JpaEventType.Removed : JpaEventType.Updated);
     }
 
     @Transient
-    protected @NotNull List<JpaEntityFieldEvent> getFieldEvent() {
-        return changedFields.stream().filter(f -> !f.isJpa()).map(f -> new JpaEntityFieldEvent(this, f, getEventType())).collect(Collectors.toList());
+    protected @NotNull List<JpaFieldEvent> getFieldEvent() {
+        return changedFields.stream().filter(f -> !f.isJpa()).map(f -> new JpaFieldEvent(this, f, getEventType())).collect(Collectors.toList());
     }
 
     @Transient

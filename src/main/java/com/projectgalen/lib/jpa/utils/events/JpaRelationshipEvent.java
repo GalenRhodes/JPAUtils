@@ -2,7 +2,7 @@ package com.projectgalen.lib.jpa.utils.events;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: JpaEntityEvent.java
+//    FILENAME: JpaEntityRelationshipEvent.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
 //        DATE: June 02, 2023
@@ -22,48 +22,33 @@ package com.projectgalen.lib.jpa.utils.events;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
+import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.base.JpaBase;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import com.projectgalen.lib.utils.U;
 
 import java.util.EventObject;
 
-@SuppressWarnings("unused")
-public class JpaEntityFieldEvent extends EventObject {
+public class JpaRelationshipEvent extends EventObject {
+    private final String                   fieldName;
+    private final Class<? extends JpaBase> targetClass;
+    private final JpaBase                  target;
+    private final JpaEventType             eventType;
 
-    private final           EventType eventType;
-    private final @NotNull  String    fieldName;
-    private final @NotNull  Class<?>  fieldType;
-    private final @Nullable Object    oldValue;
-    private @Nullable       Object    newValue;
-
-    public JpaEntityFieldEvent(JpaBase source, @NotNull JpaChangedField changedField, EventType eventType) {
+    public JpaRelationshipEvent(String fieldName, JpaBase source, Class<? extends JpaBase> targetClass, JpaBase target, JpaEventType eventType) {
         super(source);
-        this.eventType = eventType;
-        this.fieldName = changedField.fieldName;
-        this.fieldType = changedField.fieldType;
-        this.oldValue  = changedField.oldValue;
-        this.newValue  = changedField.newValue;
+        if(!U.isObjIn(eventType, JpaEventType.RelationshipAdded, JpaEventType.RelationshipRemoved)) throw new IllegalArgumentException(HibernateUtil.msgs.format("msg.err.bad_event_type", eventType));
+        this.fieldName   = fieldName;
+        this.target      = target;
+        this.targetClass = targetClass;
+        this.eventType   = eventType;
     }
 
-    public EventType getEventType() {
-        return eventType;
-    }
-
-    public @NotNull String getFieldName() {
+    public String getFieldName() {
         return fieldName;
     }
 
-    public @NotNull Class<?> getFieldType() {
-        return fieldType;
-    }
-
-    public @Nullable Object getNewValue() {
-        return newValue;
-    }
-
-    public @Nullable Object getOldValue() {
-        return oldValue;
+    public JpaEventType getEventType() {
+        return eventType;
     }
 
     @Override
@@ -71,7 +56,11 @@ public class JpaEntityFieldEvent extends EventObject {
         return (JpaBase)super.getSource();
     }
 
-    public void setNewValue(@Nullable Object newValue) {
-        this.newValue = newValue;
+    public JpaBase getTarget() {
+        return target;
+    }
+
+    public Class<? extends JpaBase> getTargetClass() {
+        return targetClass;
     }
 }

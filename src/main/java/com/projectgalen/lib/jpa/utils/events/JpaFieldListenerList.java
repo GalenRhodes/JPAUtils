@@ -32,42 +32,42 @@ public final class JpaFieldListenerList {
 
     public JpaFieldListenerList() { }
 
-    public void addListener(@NotNull JpaEntityFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldType, EventType... eventTypes) {
-        synchronized(listeners) { listeners.add(new ListenerItem(listener, fieldName, fieldType, eventTypes)); }
+    public void addListener(@NotNull JpaFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldClass, JpaEventType... eventTypes) {
+        synchronized(listeners) { listeners.add(new ListenerItem(listener, fieldName, fieldClass, eventTypes)); }
     }
 
-    public void fireEntityEvent(@NotNull JpaEntityFieldEvent event) {
+    public void fireEntityEvent(@NotNull JpaFieldEvent event) {
         synchronized(listeners) { listeners.stream().filter(l -> l.matches(event)).forEach(l -> l.listener.handleEntityEvent(event)); }
     }
 
-    public void removeListener(@NotNull JpaEntityFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldType, EventType... eventTypes) {
-        synchronized(listeners) { listeners.removeIf(l -> l.matches(listener, fieldName, fieldType, eventTypes)); }
+    public void removeListener(@NotNull JpaFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldClass, JpaEventType... eventTypes) {
+        synchronized(listeners) { listeners.removeIf(l -> l.matches(listener, fieldName, fieldClass, eventTypes)); }
     }
 
     private static final class ListenerItem {
 
-        public final @NotNull  Set<EventType>         eventTypes;
-        public final @NotNull  JpaEntityFieldListener listener;
-        public final @Nullable String                 fieldName;
-        public final @Nullable Class<?>               fieldType;
+        public final @NotNull  Set<JpaEventType> eventTypes;
+        public final @NotNull  JpaFieldListener  listener;
+        public final @Nullable String            fieldName;
+        public final @Nullable Class<?>          fieldClass;
 
-        public ListenerItem(@NotNull JpaEntityFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldType, EventType[] eventTypes) {
+        public ListenerItem(@NotNull JpaFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldClass, JpaEventType[] eventTypes) {
             this.listener   = listener;
             this.fieldName  = fieldName;
-            this.fieldType  = fieldType;
+            this.fieldClass = fieldClass;
             this.eventTypes = new HashSet<>(Arrays.asList(eventTypes));
         }
 
-        public boolean matches(JpaEntityFieldEvent event) {
+        public boolean matches(JpaFieldEvent event) {
             return (((this.fieldName == null) || this.fieldName.equals(event.getFieldName()))
-                    && ((this.fieldType == null) || (this.fieldType == event.getFieldType()))
+                    && ((this.fieldClass == null) || (this.fieldClass == event.getFieldClass()))
                     && this.eventTypes.contains(event.getEventType()));
         }
 
-        public boolean matches(@NotNull JpaEntityFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldType, EventType[] eventTypes) {
+        public boolean matches(@NotNull JpaFieldListener listener, @Nullable String fieldName, @Nullable Class<?> fieldType, JpaEventType[] eventTypes) {
             return (Objects.equals(this.listener, listener)
                     && Objects.equals(this.fieldName, fieldName)
-                    && Objects.equals(this.fieldType, fieldType)
+                    && Objects.equals(this.fieldClass, fieldType)
                     && this.eventTypes.equals(new HashSet<>(Arrays.asList(eventTypes))));
         }
     }

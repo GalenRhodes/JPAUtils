@@ -30,37 +30,37 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Objects;
 
 @SuppressWarnings("unused")
-public class JpaChangedField implements Comparable<JpaChangedField> {
+public class ChangedField implements Comparable<ChangedField> {
 
     public final @NotNull  String   fieldName;
-    public final @NotNull  Class<?> fieldType;
+    public final @NotNull  Class<?> fieldClass;
     public final @Nullable Object   oldValue;
     public @Nullable       Object   newValue;
 
-    public JpaChangedField(@NotNull String fieldName, @NotNull Class<?> fieldType, @Nullable Object oldValue, @Nullable Object newValue) {
-        this.fieldName = fieldName;
-        this.fieldType = fieldType;
-        this.oldValue  = oldValue;
-        this.newValue  = newValue;
+    public ChangedField(@NotNull String fieldName, @NotNull Class<?> fieldClass, @Nullable Object oldValue, @Nullable Object newValue) {
+        this.fieldName  = fieldName;
+        this.fieldClass = fieldClass;
+        this.oldValue   = oldValue;
+        this.newValue   = newValue;
     }
 
     @Override
-    public int compareTo(@NotNull JpaChangedField o) {
+    public int compareTo(@NotNull ChangedField o) {
         int cc = fieldName.compareTo(o.fieldName);
-        return ((cc == 0) ? fieldType.getName().compareTo(o.fieldType.getName()) : cc);
+        return ((cc == 0) ? fieldClass.getName().compareTo(o.fieldClass.getName()) : cc);
     }
 
     public boolean equals(@NotNull String fieldName, @NotNull Class<?> fieldType) {
-        return (fieldName.equals(this.fieldName) && (fieldType == this.fieldType));
+        return (fieldName.equals(this.fieldName) && (fieldType == this.fieldClass));
     }
 
     @Override
     public boolean equals(Object o) {
-        return ((this == o) || ((o instanceof JpaChangedField) && _equals((JpaChangedField)o)));
+        return ((this == o) || ((o instanceof ChangedField) && _equals((ChangedField)o)));
     }
 
-    public @NotNull Class<?> getFieldType() {
-        return fieldType;
+    public @NotNull Class<?> getFieldClass() {
+        return fieldClass;
     }
 
     public @NotNull String getFieldName() {
@@ -77,11 +77,11 @@ public class JpaChangedField implements Comparable<JpaChangedField> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(fieldName, fieldType);
+        return Objects.hash(fieldName, fieldClass);
     }
 
     public boolean isJpa() {
-        return JpaBase.class.isAssignableFrom(fieldType);
+        return JpaBase.class.isAssignableFrom(fieldClass);
     }
 
     public void setNewValue(@Nullable Object newValue) {
@@ -89,7 +89,7 @@ public class JpaChangedField implements Comparable<JpaChangedField> {
     }
 
     @Contract(pure = true)
-    private boolean _equals(@NotNull JpaChangedField o) {
-        return (Objects.equals(fieldName, o.fieldName) && (fieldType == o.fieldType));
+    private boolean _equals(@NotNull ChangedField o) {
+        return (Objects.equals(fieldName, o.fieldName) && (fieldClass == o.fieldClass));
     }
 }

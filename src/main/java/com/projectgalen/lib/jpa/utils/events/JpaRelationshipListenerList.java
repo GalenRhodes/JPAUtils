@@ -35,41 +35,39 @@ public final class JpaRelationshipListenerList {
 
     public JpaRelationshipListenerList() { }
 
-    public void addListener(@NotNull JpaEntityRelationshipListener listener, @Nullable String sourceFieldName, @Nullable Class<? extends JpaBase> targetClass, EventType... eventTypess) {
-        synchronized(listeners) { listeners.add(new ListenerItem(listener, sourceFieldName, targetClass, eventTypess)); }
+    public void addListener(@NotNull JpaRelationshipListener listener, @Nullable String sourceFieldName, @Nullable Class<? extends JpaBase> targetClass, JpaEventType... eventTypes) {
+        synchronized(listeners) { listeners.add(new ListenerItem(listener, sourceFieldName, targetClass, eventTypes)); }
     }
 
-    public void fireRelationshipEvent(@NotNull JpaEntityRelationshipEvent event) {
-        synchronized(listeners) {
-            listeners.stream().filter(l -> l.matches(event.getFieldName(), event.getTargetClass(), event.getEventType())).forEach(l -> l.listener.handleEntityRelationshipEvent(event));
-        }
+    public void fireRelationshipEvent(@NotNull JpaRelationshipEvent event) {
+        synchronized(listeners) { listeners.stream().filter(l -> l.matches(event)).forEach(l -> l.listener.handleEntityRelationshipEvent(event)); }
     }
 
-    public void removeListener(@NotNull JpaEntityRelationshipListener listener, @Nullable String sourceFieldName, @Nullable Class<? extends JpaBase> targetClass, EventType... eventTypes) {
+    public void removeListener(@NotNull JpaRelationshipListener listener, @Nullable String sourceFieldName, @Nullable Class<? extends JpaBase> targetClass, JpaEventType... eventTypes) {
         synchronized(listeners) { listeners.removeIf(l -> l.matches(listener, sourceFieldName, targetClass, eventTypes)); }
     }
 
     private static final class ListenerItem {
 
-        public final @NotNull  JpaEntityRelationshipListener listener;
-        public final @Nullable String                        fieldName;
-        public final @Nullable Class<? extends JpaBase>      targetClass;
-        public final @NotNull  Set<EventType>                eventTypes;
+        public final @NotNull  JpaRelationshipListener  listener;
+        public final @Nullable String                   fieldName;
+        public final @Nullable Class<? extends JpaBase> targetClass;
+        public final @NotNull  Set<JpaEventType>        eventTypes;
 
-        public ListenerItem(@NotNull JpaEntityRelationshipListener listener, @Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, EventType[] eventTypes) {
+        public ListenerItem(@NotNull JpaRelationshipListener listener, @Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, JpaEventType[] eventTypes) {
             this.listener    = listener;
             this.fieldName   = fieldName;
             this.targetClass = targetClass;
             this.eventTypes  = new HashSet<>(Arrays.asList(eventTypes));
         }
 
-        public boolean matches(@Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, EventType eventType) {
-            return (((this.fieldName == null) || this.fieldName.equals(fieldName))/*@f0*/
-                    && ((this.targetClass == null) || (this.targetClass == targetClass))
-                    && (eventTypes.isEmpty() || eventTypes.contains(eventType)));
+        public boolean matches(@NotNull JpaRelationshipEvent event) {
+            return (((this.fieldName == null) || this.fieldName.equals(event.getFieldName()))/*@f0*/
+                    && ((this.targetClass == null) || (this.targetClass == event.getTargetClass()))
+                    && (eventTypes.isEmpty() || eventTypes.contains(event.getEventType())));
         }/*@f1*/
 
-        public boolean matches(@NotNull JpaEntityRelationshipListener listener, @Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, EventType[] eventTypes) {
+        public boolean matches(@NotNull JpaRelationshipListener listener, @Nullable String fieldName, @Nullable Class<? extends JpaBase> targetClass, JpaEventType[] eventTypes) {
             return (this.listener.equals(listener)
                     && Objects.equals(this.fieldName, fieldName)
                     && Objects.equals(this.targetClass, targetClass)
