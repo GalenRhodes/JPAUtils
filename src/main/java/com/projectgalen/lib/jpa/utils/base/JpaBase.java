@@ -26,6 +26,7 @@ import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
 import com.projectgalen.lib.jpa.utils.events.EventType;
+import com.projectgalen.lib.jpa.utils.events.JpaChangedField;
 import com.projectgalen.lib.utils.Null;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.ManyToOne;
@@ -37,7 +38,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
-import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -49,8 +49,8 @@ import static com.projectgalen.lib.jpa.utils.enums.JpaState.*;
 @SuppressWarnings({ "unused" })
 public class JpaBase {
 
-    protected final @Transient Set<ChangeInfo> changedFields = new TreeSet<>();
-    protected @Transient       JpaState        jpaState;
+    protected final @Transient Set<JpaChangedField<?>> changedFields = new TreeSet<>();
+    protected @Transient       JpaState                jpaState;
 
     public JpaBase() {
         jpaState = CURRENT;
@@ -68,12 +68,12 @@ public class JpaBase {
     }
 
     @Transient
-    public Stream<ChangeInfo> getChangedFieldStream() {
+    public Stream<JpaChangedField<?>> getChangedFieldStream() {
         return changedFields.stream();
     }
 
     @Transient
-    public Set<ChangeInfo> getChangedFields() {
+    public Set<JpaChangedField<?>> getChangedFields() {
         return getChangedFieldStream().collect(Collectors.toSet());
     }
 
@@ -130,9 +130,10 @@ public class JpaBase {
         this.jpaState = jpaState;
     }
 
+    @SuppressWarnings("unchecked")
     protected void addValueToChangeMap(@NotNull String fieldName, boolean isJpa, @Nullable Object originalValue, @Nullable Object newValue) {
-        ChangeInfo ci = findChangeInfo(fieldName, isJpa);
-        if(ci == null) changedFields.add(new ChangeInfo(fieldName, isJpa, originalValue, newValue));
+        JpaChangedField<? super Object> ci = (JpaChangedField<? super Object>)findChangeInfo(fieldName, isJpa);
+        if(ci == null) changedFields.add(new JpaChangedField<>(fieldName, isJpa, originalValue, newValue));
         else ci.setNewValue(newValue);
     }
 
@@ -140,13 +141,14 @@ public class JpaBase {
         return (findChangeInfo(fieldName, isJpa) != null);
     }
 
-    protected @Nullable ChangeInfo findChangeInfo(@NotNull String fieldName, boolean isJpa) {
-        return changedFields.stream().filter(o -> (fieldName.equals(o.getFieldName()) && (o.isJpa() == isJpa))).findFirst().orElse(null);
+    protected @Nullable JpaChangedField<?> findChangeInfo(@NotNull String fieldName, boolean isJpa) {
+        return changedFields.stream().filter(o -> (o.getFieldName().equals(fieldName) && o.isJpa() == isJpa)).findFirst().orElse(null);
     }
 
     @Transient
-    protected @NotNull Set<String> getChangedFieldNamesForEvent() {
-        return ((getJpaState() == JpaState.DIRTY) ? getChangedFields().stream().filter(o -> !o.isJpa()).map(ChangeInfo::getFieldName).collect(Collectors.toSet()) : Collections.emptySet());
+    protected @NotNull Set<JpaChangedField<?>> getChangedFieldsForEvent() {
+        if(getJpaState() == CURRENT) return new TreeSet<>();
+        return changedFields.stream().filter(JpaChangedField::isJpa).collect(Collectors.toSet());
     }
 
     @Transient
@@ -176,7 +178,7 @@ public class JpaBase {
     private void saveChild(@NotNull Session session, @NotNull Transaction tx, Field field) {
         try {
             field.setAccessible(true);
-            Null.doIfNotNull((JpaBase)field.get(this), c -> c.saveChanges(session, tx, true));
+            Null.doIfNotNull((JpaBase)field.get(this), o -> o.saveChanges(session, tx, true));
         }
         catch(Exception e) {
             throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));

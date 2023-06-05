@@ -29,24 +29,28 @@ import java.util.Objects;
 
 @SuppressWarnings("unused")
 public class JpaChangedField<T> implements Comparable<JpaChangedField<T>> {
-    public final @NotNull  String fieldName;
-    public final @Nullable T      oldValue;
-    public final @Nullable T      newValue;
 
-    public JpaChangedField(@NotNull String fieldName, @Nullable T oldValue, @Nullable T newValue) {
+    public final @NotNull  String  fieldName;
+    public final           boolean isJpa;
+    public final @Nullable T       oldValue;
+    public @Nullable       T       newValue;
+
+    public JpaChangedField(@NotNull String fieldName, boolean isJpa, @Nullable T oldValue, @Nullable T newValue) {
         this.fieldName = fieldName;
         this.oldValue  = oldValue;
         this.newValue  = newValue;
+        this.isJpa     = isJpa;
     }
 
     @Override
     public int compareTo(@NotNull JpaChangedField<T> o) {
-        return fieldName.compareTo(o.fieldName);
+        int cc = fieldName.compareTo(o.fieldName);
+        return ((cc == 0) ? Boolean.compare(isJpa, o.isJpa) : cc);
     }
 
     @Override
     public boolean equals(Object o) {
-        return ((this == o) || ((o instanceof JpaChangedField) && Objects.equals(fieldName, ((JpaChangedField<?>)o).fieldName)));
+        return ((this == o) || ((o instanceof JpaChangedField) && _equals((JpaChangedField<?>)o)));
     }
 
     public @NotNull String getFieldName() {
@@ -63,6 +67,18 @@ public class JpaChangedField<T> implements Comparable<JpaChangedField<T>> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(fieldName);
+        return Objects.hash(fieldName, isJpa);
+    }
+
+    public boolean isJpa() {
+        return isJpa;
+    }
+
+    public void setNewValue(@Nullable T newValue) {
+        this.newValue = newValue;
+    }
+
+    private boolean _equals(JpaChangedField<?> oo) {
+        return (Objects.equals(fieldName, oo.fieldName) && (isJpa == oo.isJpa));
     }
 }
