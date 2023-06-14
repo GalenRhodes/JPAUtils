@@ -1,11 +1,11 @@
-package com.projectgalen.lib.jpa.utils.events;
+package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: EventType.java
+//    FILENAME: EntitySessionDoDelegate.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: June 02, 2023
+//        DATE: June 06, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,6 +22,10 @@ package com.projectgalen.lib.jpa.utils.events;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-public enum JpaEventType {
-    None, Updated, Removed, Added, RelationshipAdded, RelationshipRemoved
+import com.projectgalen.lib.jpa.utils.base.JpaBase;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+
+public interface EntitySessionDoDelegate<T extends JpaBase> {
+    void action(Session session, Transaction tx, T entity);
 }

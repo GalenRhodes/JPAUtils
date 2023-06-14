@@ -26,10 +26,7 @@ import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.errors.DaoException;
 import com.projectgalen.lib.jpa.utils.errors.SvcConstraintViolation;
-import com.projectgalen.lib.jpa.utils.interfaces.EntityDoDelegate;
-import com.projectgalen.lib.jpa.utils.interfaces.QueryDelegate;
-import com.projectgalen.lib.jpa.utils.interfaces.SessionDoDelegate;
-import com.projectgalen.lib.jpa.utils.interfaces.SessionGetDelegate;
+import com.projectgalen.lib.jpa.utils.interfaces.*;
 import com.projectgalen.lib.utils.PGProperties;
 import com.projectgalen.lib.utils.PGResourceBundle;
 import com.projectgalen.lib.utils.reflection.Reflection;
@@ -45,23 +42,26 @@ import org.hibernate.query.Query;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Field;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.projectgalen.lib.utils.PGArrays.wrap;
 import static com.projectgalen.lib.utils.errors.Errors.findNestedCause;
 
 @SuppressWarnings({ "unused", "UnusedReturnValue" })
 public class HibernateUtil {
-    private static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
-    public static final  PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
-    private static final ReentrantLock    lock  = new ReentrantLock(true);
+    private static final ReentrantLock lock = new ReentrantLock(true);
 
-    public static final String[] STRNA = new String[0];
-    public static final Object[] OBJNA = new Object[0];
+    public static final PGProperties     props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
+    public static final PGResourceBundle msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
+    public static final String[]         STRNA = new String[0];
+    public static final Object[]         OBJNA = new Object[0];
 
     private HibernateUtil() { }
 
@@ -72,117 +72,117 @@ public class HibernateUtil {
         }
     }
 
-    public static @NotNull <T extends JpaBase> List<T> find(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues) {
+    public static @NotNull <T extends JpaBase> List<T> find(@NotNull Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues) {
         return find(cls, searchFields, searchValues, STRNA);
     }
 
-    public static @NotNull <T extends JpaBase> List<T> find(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields) {
+    public static @NotNull <T extends JpaBase> List<T> find(@NotNull Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields) {
         return find(cls, searchFields, searchValues, sortFields, 0, Integer.MAX_VALUE);
     }
 
-    public static @NotNull <T extends JpaBase> List<T> find(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord, int maxRecordsToReturn) {
+    public static @NotNull <T extends JpaBase> List<T> find(@NotNull Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord, int maxRecordsToReturn) {
         return find(cls, searchFields, searchValues, STRNA, startingRecord, maxRecordsToReturn);
     }
 
-    public static @NotNull <T extends JpaBase> List<T> find(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn) {
+    public static @NotNull <T extends JpaBase> List<T> find(@NotNull Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn) {
         return Objects.requireNonNullElse(HibernateUtil.find(cls, searchFields, searchValues, sortFields, Query::list), new ArrayList<>());
     }
 
-    public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> R find(@NotNull Class<E> cls, @NotNull String queryString, @NotNull Map<String, Object> parameters, @NotNull QueryDelegate<E, R> queryAction) {
         return find(cls, queryString, parameters, 0, Integer.MAX_VALUE, queryAction);
     }
 
-    public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> R find(@NotNull Class<E> cls, @NotNull String queryString, @NotNull Map<String, Object> parameters, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         return find(cls, queryString, parameters, 0, maxRecordsToReturn, queryAction);
     }
 
-    public static <E extends JpaBase, R> R find(Class<E> cls, String queryString, Map<String, Object> parameters, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> R find(@NotNull Class<E> cls, @NotNull String queryString, @NotNull Map<String, Object> parameters, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         return HibernateUtil.withSessionGet((session, tx) -> {
             Query<E> query = session.createQuery(queryString, cls);
-            for(Map.Entry<String, Object> entry : parameters.entrySet()) query.setParameter(entry.getKey(), entry.getValue());
+            parameters.forEach(query::setParameter);
             if(startingRecord > 0) query.setFirstResult(startingRecord);
             query.setMaxResults(maxRecordsToReturn);
             return initialize(queryAction.action(query));
         });
     }
 
-    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> @Nullable R find(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, @NotNull QueryDelegate<E, R> queryAction) {
         return find(cls, searchFields, searchValues, STRNA, queryAction);
     }
 
-    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> @Nullable R find(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, @NotNull QueryDelegate<E, R> queryAction) {
         return find(cls, searchFields, searchValues, sortFields, 0, Integer.MAX_VALUE, queryAction);
     }
 
-    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> @Nullable R find(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         return find(cls, searchFields, searchValues, STRNA, maxRecordsToReturn, queryAction);
     }
 
-    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> @Nullable R find(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         return find(cls, searchFields, searchValues, sortFields, 0, maxRecordsToReturn, queryAction);
     }
 
-    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+    public static <E extends JpaBase, R> @Nullable R find(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
         return find(cls, searchFields, searchValues, STRNA, startingRecord, maxRecordsToReturn, queryAction);
     }
 
-    public static <E extends JpaBase, R> @Nullable R find(Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
-        if(searchFields.length != searchValues.length) throw new IllegalArgumentException(msgs.format("msg.err.fields_values_count_mismatch", searchFields.length, searchValues.length));
+    public static <E extends JpaBase, R> @Nullable R find(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn, @NotNull QueryDelegate<E, R> queryAction) {
+        int fldLen = searchFields.length;
+        if(fldLen != searchValues.length) throw new IllegalArgumentException(msgs.format("msg.err.fields_values_count_mismatch", fldLen, searchValues.length));
 
-        Map<String, Object> parameters = new LinkedHashMap<>();
-        StringBuilder       sb         = new StringBuilder().append("from ").append(cls.getSimpleName()).append(" e");
+        Map<String, Object> pm = new LinkedHashMap<>();
+        StringBuilder       sb = new StringBuilder().append(String.format("from %s e", cls.getSimpleName()));
 
-        if(searchFields.length > 0) {
-            parameters.put("VAL0", searchValues[0]);
-            sb.append(" where e.").append(searchFields[0]).append(" = :VAL0");
-
-            for(int i = 1, j = searchFields.length; i < j; i++) {
-                String key = String.format("VAL%d", i);
-                parameters.put(key, searchValues[i]);
-                sb.append(" and e.").append(searchFields[i]).append(" = :").append(key);
-            }
-        }
-
-        if(sortFields.length > 0) {
-            sb.append(" order by e.").append(sortFields[0]);
-            for(int i = 1; i < sortFields.length; i++) sb.append(", e.").append(sortFields[i]);
-        }
-
-        String queryString = sb.toString();
-        return find(cls, queryString, parameters, startingRecord, maxRecordsToReturn, queryAction);
+        IntStream.range(0, fldLen).forEachOrdered(i -> pm.put(String.format("VAL%d", i), searchValues[i]));
+        IntStream.range(0, fldLen).forEachOrdered(i -> sb.append(String.format(" %s e.%s = :VAL%d", (i == 0 ? "where" : "and"), searchFields[i], i)));
+        IntStream.range(0, sortFields.length).forEachOrdered(i -> sb.append(String.format("%s e.%s", (i == 0 ? " order by" : ","), sortFields[i])));
+        return find(cls, sb.toString(), pm, startingRecord, maxRecordsToReturn, queryAction);
     }
 
-    public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls) {
+    public static @NotNull <T extends JpaBase> List<T> findAll(@NotNull Class<T> cls) {
         return findAll(cls, Integer.MAX_VALUE);
     }
 
-    public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls, int maxRecordsToReturn) {
+    public static @NotNull <T extends JpaBase> List<T> findAll(@NotNull Class<T> cls, int maxRecordsToReturn) {
         return findAll(cls, 0, maxRecordsToReturn);
     }
 
-    public static @NotNull <T extends JpaBase> List<T> findAll(Class<T> cls, int startingRecord, int maxRecordsToReturn) {
+    public static @NotNull <T extends JpaBase> List<T> findAll(@NotNull Class<T> cls, int startingRecord, int maxRecordsToReturn) {
         return find(cls, STRNA, OBJNA, STRNA, startingRecord, maxRecordsToReturn);
     }
 
-    public static @Nullable <T extends JpaBase> T get(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues) {
+    public static @Nullable <T extends JpaBase> T get(@NotNull Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues) {
         return get(cls, searchFields, searchValues, 0);
     }
 
-    public static @Nullable <T extends JpaBase> T get(Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord) {
+    public static @Nullable <T extends JpaBase> T get(@NotNull Class<T> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord) {
         return HibernateUtil.find(cls, searchFields, searchValues, STRNA, startingRecord, 1, Query::uniqueResult);
     }
 
-    public static @Nullable <T extends JpaBase> T get(Class<T> cls, @NotNull String searchField, @NotNull Object searchValue) {
+    public static @Nullable <T extends JpaBase> T get(@NotNull Class<T> cls, @NotNull String searchField, @NotNull Object searchValue) {
         return get(cls, searchField, searchValue, 0);
     }
 
-    public static @Nullable <T extends JpaBase> T get(Class<T> cls, @NotNull String searchField, @NotNull Object searchValue, int startingRecord) {
+    public static @Nullable <T extends JpaBase> T get(@NotNull Class<T> cls, @NotNull String searchField, @NotNull Object searchValue, int startingRecord) {
         return get(cls, wrap(searchField), wrap(searchValue), startingRecord);
     }
 
+    public static Stream<Field> getManyToOneFields(@NotNull Class<?> cls) {
+        return Reflection.getFieldsWithAnyAnnotation(cls, ManyToOne.class).stream().filter(f -> JpaBase.class.isAssignableFrom(f.getType()));
+    }
+
+    public static Stream<? extends JpaBase> getManyToOneValues(@NotNull JpaBase parent) {
+        return getManyToOneFields(parent.getClass()).map(f -> (JpaBase)getFieldValue(f, parent));
+    }
+
+    public static Stream<? extends JpaBase> getNonNullManyToOneValues(@NotNull JpaBase parent) {
+        return getManyToOneValues(parent).filter(Objects::nonNull);
+    }
+
     public static <R> R initialize(R entity) {
-        if((entity != null) && !Hibernate.isInitialized(entity)) Hibernate.initialize(entity);
-        if(entity instanceof Collection) for(Object o : (Collection<?>)entity) initialize(o);
+        if(entity == null) return null;
+        if(!Hibernate.isInitialized(entity)) Hibernate.initialize(entity);
+        if(entity instanceof Collection) ((Collection<?>)entity).forEach(HibernateUtil::initialize);
         return entity;
     }
 
@@ -190,24 +190,54 @@ public class HibernateUtil {
         withSessionDo(((session, tx) -> withEntityDo(entity, session::refresh)));
     }
 
-    public static void withEntityDo(@NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) { withEntityDo(true, parent, delegate); }
+    public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, int startingRecord, int maxRecordsToReturn) {
+        return stream(cls, searchFields, searchValues, STRNA, startingRecord, maxRecordsToReturn);
+    }
+
+    public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields) {
+        return stream(cls, searchFields, searchValues, sortFields, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues) {
+        return stream(cls, searchFields, searchValues, STRNA, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn) {
+        return Objects.requireNonNull(find(cls, searchFields, searchValues, sortFields, startingRecord, maxRecordsToReturn, Query::stream));
+    }
+
+    public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, @NotNull String queryString, @NotNull Map<String, Object> parameters) {
+        return stream(cls, queryString, parameters, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, @NotNull String queryString, @NotNull Map<String, Object> parameters, int startingRecord, int maxRecordsToReturn) {
+        return Objects.requireNonNull(find(cls, queryString, parameters, startingRecord, maxRecordsToReturn, Query::stream));
+    }
+
+    public static void withEntityDo(@NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) {
+        withEntityDo(true, true, parent, delegate);
+    }
 
     public static void withEntityDo(boolean parentLast, @NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) {
-        if(!parentLast) delegate.action(parent);
-        Reflection.forEachField(parent.getClass(), field -> {
-            if(field.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(field.getType())) {
-                try {
-                    field.setAccessible(true);
-                    JpaBase child = (JpaBase)field.get(parent);
-                    if(child != null) withEntityDo(parentLast, child, delegate);
-                }
-                catch(Exception e) {
-                    throw ((e instanceof DaoException) ? ((DaoException)e) : new DaoException(e));
-                }
-            }
-            return false;
-        });
-        if(parentLast) delegate.action(parent);
+        withEntityDo(true, parentLast, parent, delegate);
+    }
+
+    public static void withEntityDo(boolean deep, boolean parentLast, @NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) {
+        if(deep && !parentLast) delegate.action(parent);
+        getNonNullManyToOneValues(parent).forEach(o -> withEntityDo(parentLast, o, delegate));
+        if(deep && parentLast) delegate.action(parent);
+    }
+
+    public static void withEntityDoWithSession(@NotNull JpaBase parent, @NotNull EntitySessionDoDelegate<JpaBase> delegate) {
+        withEntityDoWithSession(true, true, parent, delegate);
+    }
+
+    public static void withEntityDoWithSession(boolean parentLast, @NotNull JpaBase parent, @NotNull EntitySessionDoDelegate<JpaBase> delegate) {
+        withEntityDoWithSession(true, parentLast, parent, delegate);
+    }
+
+    public static void withEntityDoWithSession(boolean deep, boolean parentLast, @NotNull JpaBase parent, @NotNull EntitySessionDoDelegate<JpaBase> delegate) {
+        withSessionDo((session, tx) -> withEntityDo(deep, parentLast, parent, e -> delegate.action(session, tx, e)));
     }
 
     public static void withSessionDo(@NotNull SessionDoDelegate delegate) {
@@ -220,7 +250,6 @@ public class HibernateUtil {
     public static <R> R withSessionGet(@NotNull SessionGetDelegate<R> delegate) {
         try(Session session = HibernateSessionFactory.sessionFactory.openSession()) {
             Transaction tx = session.beginTransaction();
-
             try {
                 R result = delegate.get(session, tx);
                 session.flush();
@@ -234,6 +263,16 @@ public class HibernateUtil {
         }
     }
 
+    private static Object getFieldValue(@NotNull Field f, @Nullable Object o) {
+        try {
+            f.setAccessible(true);
+            return f.get(o);
+        }
+        catch(Exception e) {
+            throw new DaoException(e);
+        }
+    }
+
     private static RuntimeException handleErrors(Throwable t) {
         if(t instanceof PersistenceException) {
             ConstraintViolationException cve = findNestedCause(t, ConstraintViolationException.class);
@@ -241,15 +280,15 @@ public class HibernateUtil {
                 SQLIntegrityConstraintViolationException sicve = findNestedCause(cve.getCause(), SQLIntegrityConstraintViolationException.class);
                 if(sicve != null) {
                     Matcher m = Pattern.compile(props.getProperty("pgbudget.dao.dup_key_regexp")).matcher(sicve.getMessage());
-                    if(m.matches()) throw new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), cve.getConstraintName());
+                    if(m.matches()) return new SvcConstraintViolation(m.group(1), m.group(2), m.group(3), cve.getConstraintName());
                 }
             }
-            throw (PersistenceException)t;
+            return (PersistenceException)t;
         }
         if(t instanceof Error) throw (Error)t;
-        if(t instanceof DaoException) throw (DaoException)t;
-        if(t instanceof RuntimeException) throw (RuntimeException)t;
-        throw new DaoException(t);
+        if(t instanceof DaoException) return (DaoException)t;
+        if(t instanceof RuntimeException) return (RuntimeException)t;
+        return new DaoException(t);
     }
 
     private static final class HibernateSessionFactory {

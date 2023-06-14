@@ -23,6 +23,7 @@ package com.projectgalen.lib.jpa.utils.errors;
 // ===========================================================================
 
 import com.projectgalen.lib.utils.PGResourceBundle;
+import org.jetbrains.annotations.NotNull;
 
 @SuppressWarnings("unused")
 public class DaoException extends RuntimeException {
@@ -46,5 +47,9 @@ public class DaoException extends RuntimeException {
 
     protected DaoException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);
+    }
+
+    public static @NotNull DaoException makeDaoException(Exception e) {
+        return (e instanceof DaoException) ? ((DaoException)e) : new DaoException(e);
     }
 }

@@ -84,6 +84,10 @@ public class ChangedField implements Comparable<ChangedField> {
         return JpaBase.class.isAssignableFrom(fieldClass);
     }
 
+    public boolean isNotJpa() {
+        return !isJpa();
+    }
+
     public void setNewValue(@Nullable Object newValue) {
         this.newValue = newValue;
     }
