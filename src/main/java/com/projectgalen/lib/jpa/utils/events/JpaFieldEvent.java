@@ -50,12 +50,12 @@ public class JpaFieldEvent extends EventObject {
         return eventType;
     }
 
-    public @NotNull String getFieldName() {
-        return fieldName;
-    }
-
     public @NotNull Class<?> getFieldClass() {
         return fieldClass;
+    }
+
+    public @NotNull String getFieldName() {
+        return fieldName;
     }
 
     public @Nullable Object getNewValue() {

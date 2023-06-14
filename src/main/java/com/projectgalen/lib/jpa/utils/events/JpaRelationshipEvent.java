@@ -43,12 +43,12 @@ public class JpaRelationshipEvent extends EventObject {
         this.eventType   = eventType;
     }
 
-    public String getFieldName() {
-        return fieldName;
-    }
-
     public JpaEventType getEventType() {
         return eventType;
+    }
+
+    public String getFieldName() {
+        return fieldName;
     }
 
     @Override
