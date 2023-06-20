@@ -39,6 +39,7 @@ import org.hibernate.Transaction;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.exception.ConstraintViolationException;
 import org.hibernate.query.Query;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -203,7 +204,7 @@ public class HibernateUtil {
     }
 
     public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, String @NotNull [] searchFields, Object @NotNull [] searchValues, String @NotNull [] sortFields, int startingRecord, int maxRecordsToReturn) {
-        return Objects.requireNonNull(find(cls, searchFields, searchValues, sortFields, startingRecord, maxRecordsToReturn, Query::stream));
+        return Objects.requireNonNull(find(cls, searchFields, searchValues, sortFields, startingRecord, maxRecordsToReturn, Query::getResultList)).stream();
     }
 
     public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, @NotNull String queryString, @NotNull Map<String, Object> parameters) {
@@ -211,7 +212,7 @@ public class HibernateUtil {
     }
 
     public static <E extends JpaBase> @NotNull Stream<E> stream(@NotNull Class<E> cls, @NotNull String queryString, @NotNull Map<String, Object> parameters, int startingRecord, int maxRecordsToReturn) {
-        return Objects.requireNonNull(find(cls, queryString, parameters, startingRecord, maxRecordsToReturn, Query::stream));
+        return Objects.requireNonNull(find(cls, queryString, parameters, startingRecord, maxRecordsToReturn, Query::getResultList)).stream();
     }
 
     public static void withEntityDo(@NotNull JpaBase parent, @NotNull EntityDoDelegate<JpaBase> delegate) {
@@ -273,7 +274,7 @@ public class HibernateUtil {
         }
     }
 
-    private static RuntimeException handleErrors(Throwable t) {
+    private static @Contract("null -> new") @NotNull RuntimeException handleErrors(Throwable t) {
         if(t instanceof PersistenceException) {
             ConstraintViolationException cve = findNestedCause(t, ConstraintViolationException.class);
             if(cve != null) {
