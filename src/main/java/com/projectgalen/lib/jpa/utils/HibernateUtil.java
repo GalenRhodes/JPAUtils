@@ -248,6 +248,15 @@ public class HibernateUtil {
         });
     }
 
+    public static <E extends JpaBase> List<E> save(@NotNull List<E> entities) {
+        return save(entities, true);
+    }
+
+    public static <E extends JpaBase> List<E> save(@NotNull List<E> entities, boolean deep) {
+        withSessionDo((session, tx) -> { for(JpaBase entity : entities) withEntityDo(deep, true, entity, e -> e.saveChanges(session)); });
+        return entities;
+    }
+
     public static <R> R withSessionGet(@NotNull SessionGetDelegate<R> delegate) {
         try(Session session = HibernateSessionFactory.sessionFactory.openSession()) {
             Transaction tx = session.beginTransaction();

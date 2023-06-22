@@ -192,7 +192,7 @@ public class JpaBase {
         if(n != null) events.add(new JpaRelationshipEvent(f.getFieldName(), this, n.getClass(), n, JpaEventType.RelationshipAdded));
     }
 
-    private void saveChanges(@NotNull Session session) {
+    public void saveChanges(@NotNull Session session) {
         // Do this before we actually save so we capture the changed fields.
         List<JpaFieldEvent>        fldEvents = getFieldEvent();
         List<JpaRelationshipEvent> relEvents = getEntityRelationshipEvents();
