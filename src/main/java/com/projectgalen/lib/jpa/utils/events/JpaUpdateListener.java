@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.events;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: JpaEntityListener.java
+//    FILENAME: JpaUpdateListener.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: June 02, 2023
+//        DATE: June 23, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -26,6 +26,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.EventListener;
 
-public interface JpaFieldListener extends EventListener {
-    void handleEntityEvent(@NotNull JpaFieldEvent event);
+public interface JpaUpdateListener extends EventListener {
+    void entityUpdated(@NotNull JpaUpdateEvent event);
 }

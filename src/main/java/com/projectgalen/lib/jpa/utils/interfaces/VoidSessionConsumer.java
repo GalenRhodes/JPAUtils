@@ -1,11 +1,11 @@
-package com.projectgalen.lib.jpa.utils.events;
+package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: JpaEntityRelationshipListener.java
+//    FILENAME: SessionExecutable.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: June 02, 2023
+//        DATE: June 29, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,10 +22,14 @@ package com.projectgalen.lib.jpa.utils.events;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
+import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.EventListener;
+public interface VoidSessionConsumer extends SessionConsumer<Object> {
+    void doWithSession(@NotNull Session session);
 
-public interface JpaRelationshipListener extends EventListener {
-    void handleEntityRelationshipEvent(@NotNull JpaRelationshipEvent event);
+    default Object getWithSession(@NotNull Session session) {
+        doWithSession(session);
+        return null;
+    }
 }

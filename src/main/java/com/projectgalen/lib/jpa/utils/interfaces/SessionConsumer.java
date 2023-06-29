@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: EntitySessionDoDelegate.java
+//    FILENAME: SessionConsumer.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: June 06, 2023
+//        DATE: June 29, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,10 +22,9 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import org.hibernate.Session;
-import org.hibernate.Transaction;
+import org.jetbrains.annotations.NotNull;
 
-public interface EntitySessionDoDelegate<T extends JpaBase> {
-    void action(Session session, Transaction tx, T entity);
+public interface SessionConsumer<R> {
+    R getWithSession(@NotNull Session session);
 }

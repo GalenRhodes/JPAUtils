@@ -1,11 +1,11 @@
-package com.projectgalen.lib.jpa.utils.interfaces;
+package com.projectgalen.lib.jpa.utils.annotations;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: TransactionGetDelegate.java
+//    FILENAME: EntityCache.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: April 28, 2023
+//        DATE: June 23, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -22,8 +22,15 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import org.hibernate.Transaction;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-public interface TransactionGetDelegate<T> {
-    T get(Transaction transaction);
+@Target({ ElementType.METHOD })
+@Retention(RetentionPolicy.RUNTIME)
+public @interface EntityCache {
+    String className();
+
+    String name();
 }

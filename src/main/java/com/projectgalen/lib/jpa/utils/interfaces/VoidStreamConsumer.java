@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: FromEntityAction.java
+//    FILENAME: VoidStreamConsumer.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: April 21, 2023
+//        DATE: June 29, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -23,8 +23,16 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // ===========================================================================
 
 import com.projectgalen.lib.jpa.utils.base.JpaBase;
+import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
-public interface EntityGetDelegate<R, T extends JpaBase> {
-    R action(@NotNull T entity);
+import java.util.stream.Stream;
+
+public interface VoidStreamConsumer<E extends JpaBase> extends StreamConsumer<E, Object> {
+    void doWithStream(@NotNull Session session, @NotNull Stream<E> stream);
+
+    default Object getWithStream(@NotNull Session session, @NotNull Stream<E> stream) {
+        doWithStream(session, stream);
+        return null;
+    }
 }
