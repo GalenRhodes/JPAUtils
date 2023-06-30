@@ -22,23 +22,26 @@ package com.projectgalen.lib.jpa.utils.base;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.events.JpaUpdateEvent;
 import com.projectgalen.lib.jpa.utils.events.JpaUpdateListener;
 import com.projectgalen.lib.utils.EventListeners;
 import com.projectgalen.lib.utils.reflection.Reflection;
-import com.projectgalen.lib.utils.reflection.Reflection2;
+import jakarta.persistence.Column;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Transient;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.util.Objects;
 import java.util.stream.Stream;
 
 import static com.projectgalen.lib.jpa.utils.enums.JpaState.*;
+import static com.projectgalen.lib.utils.reflection.Reflection2.getAnnotatedFields;
+import static com.projectgalen.lib.utils.reflection.Reflection2.getFields;
 
 @SuppressWarnings("unused")
 public class JpaBase {
@@ -60,7 +63,7 @@ public class JpaBase {
     }
 
     public @Transient void delete() {
-        HibernateUtil.withSessionDo(this::delete);
+        _HibernateUtils.withSessionDo(this::delete);
     }
 
     public @Transient void delete(@NotNull Session session) {
@@ -70,12 +73,16 @@ public class JpaBase {
         }
     }
 
+    public @Transient @NotNull Stream<JpaBase> getManyToOneStream() {
+        return getFields(getClass()).filter(JpaBase::isChildField).map(f -> (JpaBase)Reflection.getFieldValue(f, this)).filter(Objects::nonNull);
+    }
+
     public @Transient @NotNull JpaState getJpaState() {
         return jpaState;
     }
 
-    public @Transient @NotNull Stream<JpaBase> getManyToOneStream() {
-        return Reflection2.getFields(getClass()).filter(JpaBase::isChildField).map(f -> (JpaBase)Reflection.getFieldValue(f, this)).filter(Objects::nonNull);
+    public @Transient void saveChanges(boolean deep) {
+        _HibernateUtils.withSessionDo(session -> saveChanges(session, deep));
     }
 
     public @Transient boolean isCurrent() {
@@ -102,8 +109,12 @@ public class JpaBase {
         saveChanges(session, true);
     }
 
-    public @Transient void saveChanges(boolean deep) {
-        HibernateUtil.withSessionDo(session -> saveChanges(session, deep));
+    protected void setField(@NotNull String name, @Nullable Object value) {
+        Field fld = getAnnotatedFields(getClass(), Column.class, ManyToOne.class, OneToOne.class).filter(f -> f.getName().equals(name)).findFirst().orElse(null);
+        if((fld != null) && !Objects.equals(Reflection.getFieldValue(fld, this), value)) {
+            Reflection.setFieldValue(fld, this, value);
+            setAsDirty();
+        }
     }
 
     public @Transient void saveChanges() {
