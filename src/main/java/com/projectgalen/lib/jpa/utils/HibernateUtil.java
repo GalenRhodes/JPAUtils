@@ -35,6 +35,7 @@ import org.hibernate.query.Query;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -46,6 +47,14 @@ public final class HibernateUtil {
     public static final Object @NotNull [] OBJNA = new Object[0];
 
     private HibernateUtil() { }
+
+    public static <E extends JpaBase, R> R buildAndQuery(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, @NotNull QueryBuilderHandler<R> handler) {
+        return buildQuery(cls, "and", fields, values, sortFields, handler);
+    }
+
+    public static <E extends JpaBase, R> R buildOrQuery(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, @NotNull QueryBuilderHandler<R> handler) {
+        return buildQuery(cls, "or", fields, values, sortFields, handler);
+    }
 
     public static <E extends JpaBase> void doStream(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, @NotNull VoidStreamConsumer<E> consumer) {
         doStream(cls, fields, values, 0, Integer.MAX_VALUE, consumer);
@@ -60,7 +69,7 @@ public final class HibernateUtil {
     }
 
     public static <E extends JpaBase> void doStream(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, int firstRecord, int maxRecords, @NotNull VoidStreamConsumer<E> consumer) {
-        buildQuery(cls, fields, values, sortFields, (q, p) -> stream(cls, q, p, firstRecord, maxRecords, consumer));
+        buildAndQuery(cls, fields, values, sortFields, (q, p) -> stream(cls, q, p, firstRecord, maxRecords, consumer));
     }
 
     public static <E extends JpaBase> void doStream(@NotNull Class<E> cls, @NotNull String qry, @NotNull Map<String, Object> prms, @NotNull VoidStreamConsumer<E> consumer) {
@@ -71,16 +80,52 @@ public final class HibernateUtil {
         stream(cls, qry, prms, firstRecord, maxRecords, consumer);
     }
 
-    public static <E extends JpaBase, R> R query(@NotNull Session session, @NotNull Class<E> cls, @NotNull String query, @NotNull Map<String, Object> params, int firstRecord, int maxRecords, @NotNull QueryDelegate<E, R> delegate) {
-        Query<E> q = session.createQuery(query, cls);
-        params.forEach(q::setParameter);
-        if(firstRecord > 0) q.setFirstResult(firstRecord);
-        q.setMaxResults(maxRecords);
-        return delegate.getWithQuery(q);
+    public static <E extends JpaBase> List<E> find(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values) {
+        return find(cls, fields, values, STRNA, 0, Integer.MAX_VALUE);
     }
 
-    public static <E extends JpaBase, R> R query(@NotNull Session session, @NotNull Class<E> cls, @NotNull String query, @NotNull Map<String, Object> params, @NotNull QueryDelegate<E, R> delegate) {
-        return query(session, cls, query, params, 0, Integer.MAX_VALUE, delegate);
+    public static <E extends JpaBase> List<E> find(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields) {
+        return find(cls, fields, values, sortFields, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, int firstRecord, int maxRecords) {
+        return find(cls, fields, values, STRNA, firstRecord, maxRecords);
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, int firstRecord, int maxRecords) {
+        return buildAndQuery(cls, fields, values, sortFields, (q, p) -> find(cls, q, p, firstRecord, maxRecords));
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Session session, @NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values) {
+        return find(session, cls, fields, values, STRNA, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Session session, @NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields) {
+        return find(session, cls, fields, values, sortFields, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Session session, @NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, int firstRecord, int maxRecords) {
+        return find(session, cls, fields, values, STRNA, firstRecord, maxRecords);
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Session session, @NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, int firstRecord, int maxRecords) {
+        return buildAndQuery(cls, fields, values, sortFields, (q, p) -> find(session, cls, q, p, firstRecord, maxRecords));
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Class<E> cls, @NotNull String query, @NotNull Map<String, Object> params) {
+        return find(cls, query, params, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Class<E> cls, @NotNull String query, @NotNull Map<String, Object> params, int firstRecord, int maxRecords) {
+        return withSessionGet(session -> find(session, cls, query, params, firstRecord, maxRecords));
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Session session, @NotNull Class<E> cls, @NotNull String query, @NotNull Map<String, Object> params) {
+        return find(session, cls, query, params, 0, Integer.MAX_VALUE);
+    }
+
+    public static <E extends JpaBase> List<E> find(@NotNull Session session, @NotNull Class<E> cls, @NotNull String query, @NotNull Map<String, Object> params, int firstRecord, int maxRecords) {
+        return query(session, cls, query, params, firstRecord, maxRecords, Query::list);
     }
 
     public static <E extends JpaBase, R> R stream(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, @NotNull StreamConsumer<E, R> consumer) {
@@ -96,7 +141,7 @@ public final class HibernateUtil {
     }
 
     public static <E extends JpaBase, R> R stream(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, int firstRecord, int maxRecords, @NotNull StreamConsumer<E, R> consumer) {
-        return buildQuery(cls, fields, values, sortFields, (q, p) -> stream(cls, q, p, firstRecord, maxRecords, consumer));
+        return buildAndQuery(cls, fields, values, sortFields, (q, p) -> stream(cls, q, p, firstRecord, maxRecords, consumer));
     }
 
     public static <E extends JpaBase, R> R stream(@NotNull Class<E> cls, @NotNull String qry, @NotNull Map<String, Object> prms, int firstRecord, int maxRecords, @NotNull StreamConsumer<E, R> consumer) {
@@ -120,7 +165,7 @@ public final class HibernateUtil {
     }
 
     public static <E extends JpaBase> Stream<E> stream(@NotNull Session session, @NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, int firstRecord, int maxRecords) {
-        return buildQuery(cls, fields, values, sortFields, (q, p) -> stream(session, cls, q, p, firstRecord, maxRecords));
+        return buildAndQuery(cls, fields, values, sortFields, (q, p) -> stream(session, cls, q, p, firstRecord, maxRecords));
     }
 
     public static <E extends JpaBase> Stream<E> stream(@NotNull Session session, @NotNull Class<E> cls, @NotNull String qry, @NotNull Map<String, Object> prms, int firstRecord, int maxRecords) {
@@ -152,7 +197,7 @@ public final class HibernateUtil {
         }
     }
 
-    private static <E extends JpaBase, R> R buildQuery(@NotNull Class<E> cls, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, @NotNull QueryBuilderHandler<R> handler) {
+    private static <E extends JpaBase, R> R buildQuery(@NotNull Class<E> cls, String andor, String @NotNull [] fields, Object @NotNull [] values, String @NotNull [] sortFields, @NotNull QueryBuilderHandler<R> handler) {
         if(fields.length != values.length) throw new IllegalArgumentException(msgs.format("msg.err.fields_values_count_mismatch", fields.length, values.length));
 
         Map<String, Object> params = new LinkedHashMap<>();
@@ -163,7 +208,7 @@ public final class HibernateUtil {
             params.put("v0", values[0]);
 
             for(int i = 1; i < fields.length; i++) {
-                sb.append(String.format(" and e.%s = :v%d", fields[i], i));
+                sb.append(String.format(" %s e.%s = :v%d", andor, fields[i], i));
                 params.put(String.format("v%d", i), values[i]);
             }
         }
@@ -174,6 +219,14 @@ public final class HibernateUtil {
         }
 
         return handler.withBuiltQuery(sb.toString(), params);
+    }
+
+    private static <E extends JpaBase, R> R query(@NotNull Session session, @NotNull Class<E> cls, @NotNull String query, @NotNull Map<String, Object> params, int firstRecord, int maxRecords, @NotNull QueryDelegate<E, R> delegate) {
+        Query<E> q = session.createQuery(query, cls);
+        params.forEach(q::setParameter);
+        if(firstRecord > 0) q.setFirstResult(firstRecord);
+        q.setMaxResults(maxRecords);
+        return delegate.getWithQuery(q);
     }
 
     private static final class HibernateSessionFactory {
