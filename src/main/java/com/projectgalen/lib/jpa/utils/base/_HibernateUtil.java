@@ -43,13 +43,13 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class _HibernateUtils {
+public class _HibernateUtil {
     public static final PGProperties       props = PGProperties.getXMLProperties("settings.xml", HibernateUtil.class);
     public static final PGResourceBundle   msgs  = PGResourceBundle.getXMLPGBundle("com.projectgalen.lib.jpa.utils.messages");
     public static final String @NotNull [] STRNA = new String[0];
     public static final Object @NotNull [] OBJNA = new Object[0];
 
-    public _HibernateUtils() { }
+    public _HibernateUtil() { }
 
     public static void withSessionDo(@NotNull VoidSessionConsumer executable) {
         withSessionGet(executable);
@@ -108,8 +108,8 @@ public class _HibernateUtils {
         if(fields.length != values.length) throw new IllegalArgumentException(msgs.format("msg.err.fields_values_count_mismatch", fields.length, values.length));
 
         StringBuilder sb = new StringBuilder().append(String.format("from %s e", cls.getSimpleName()));
-        if(fields.length > 0) sb.append(Streams.arrayStream(fields).map(_HibernateUtils::foo01).collect(Collectors.joining(andor, " where", "")));
-        if(sortFields.length > 0) sb.append(Arrays.stream(sortFields).map(_HibernateUtils::foo02).collect(Collectors.joining(",", " order by", "")));
+        if(fields.length > 0) sb.append(Streams.arrayStream(fields).map(_HibernateUtil::foo01).collect(Collectors.joining(andor, " where", "")));
+        if(sortFields.length > 0) sb.append(Arrays.stream(sortFields).map(_HibernateUtil::foo02).collect(Collectors.joining(",", " order by", "")));
 
         Query<E> qry = session.createQuery(sb.toString(), cls);
         if(values.length > 0) Streams.arrayStream(values).forEach(i -> foo03(qry, i));

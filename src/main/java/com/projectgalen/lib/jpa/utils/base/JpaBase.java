@@ -22,21 +22,20 @@ package com.projectgalen.lib.jpa.utils.base;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
+import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.events.JpaUpdateEvent;
 import com.projectgalen.lib.jpa.utils.events.JpaUpdateListener;
 import com.projectgalen.lib.utils.EventListeners;
 import com.projectgalen.lib.utils.reflection.Reflection;
-import jakarta.persistence.Column;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Transient;
+import jakarta.persistence.*;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static com.projectgalen.lib.jpa.utils.enums.JpaState.*;
@@ -47,8 +46,9 @@ import static com.projectgalen.lib.utils.reflection.Reflection2.getFields;
 public class JpaBase {
 
     protected final @Transient EventListeners updateEventListeners = new EventListeners();
+    protected final @Transient String         syncLock             = UUID.randomUUID().toString();
 
-    protected @Transient JpaState jpaState;
+    private @Transient JpaState jpaState;
 
     public JpaBase() {
         jpaState = CURRENT;
@@ -56,57 +56,87 @@ public class JpaBase {
 
     public JpaBase(boolean dummy) {
         jpaState = NEW;
+        HibernateUtil.addToDirtyList(this);
     }
 
     public @Transient void addUpdateListener(@NotNull JpaUpdateListener listener) {
-        updateEventListeners.add(JpaUpdateListener.class, listener);
+        synchronized(syncLock) { updateEventListeners.add(JpaUpdateListener.class, listener); }
     }
 
     public @Transient void delete() {
-        _HibernateUtils.withSessionDo(this::delete);
-    }
-
-    public @Transient void delete(@NotNull Session session) {
-        if((jpaState != NEW) && (jpaState != DELETED)) {
-            session.remove(this);
+        synchronized(syncLock) {
             jpaState = DELETED;
+            HibernateUtil.addToDirtyList(this);
         }
     }
 
-    public @Transient @NotNull Stream<JpaBase> getManyToOneStream() {
-        return getFields(getClass()).filter(JpaBase::isChildField).map(f -> (JpaBase)Reflection.getFieldValue(f, this)).filter(Objects::nonNull);
-    }
-
     public @Transient @NotNull JpaState getJpaState() {
-        return jpaState;
-    }
-
-    public @Transient void saveChanges(boolean deep) {
-        _HibernateUtils.withSessionDo(session -> saveChanges(session, deep));
+        synchronized(syncLock) { return jpaState; }
     }
 
     public @Transient boolean isCurrent() {
-        return (jpaState == CURRENT);
+        synchronized(syncLock) { return (jpaState == CURRENT); }
     }
 
     public @Transient boolean isDeleted() {
-        return (jpaState == DELETED);
+        synchronized(syncLock) { return (jpaState == DELETED); }
     }
 
     public @Transient boolean isDirty() {
-        return ((jpaState == DIRTY) || (jpaState == NEW));
+        synchronized(syncLock) { return ((jpaState == DIRTY) || (jpaState == NEW)); }
     }
 
     public @Transient boolean isNew() {
-        return (jpaState == NEW);
+        synchronized(syncLock) { return (jpaState == NEW); }
     }
 
     public @Transient void removeUpdateListener(@NotNull JpaUpdateListener listener) {
-        updateEventListeners.remove(JpaUpdateListener.class, listener);
+        synchronized(syncLock) { updateEventListeners.remove(JpaUpdateListener.class, listener); }
+    }
+
+    public @Transient void saveChanges(boolean deep) {
+        HibernateUtil.withSessionDo(session -> saveChanges(session, deep));
     }
 
     public @Transient void saveChanges(@NotNull Session session) {
         saveChanges(session, true);
+    }
+
+    public @Transient void saveChanges() {
+        saveChanges(true);
+    }
+
+    public @Transient void saveChanges(@NotNull Session session, boolean deep) {
+        if(deep) getManyToOneStream().forEach(c -> c.saveChanges(session, true));
+        synchronized(syncLock) {
+            switch(jpaState) {/*@f0*/
+                case NEW: saveNew(session); break;
+                case DIRTY: saveDirty(session); break;
+                case DELETED: saveDeleted(session); break;
+            }/*@f1*/
+        }
+    }
+
+    public @Transient void setAsDirty() {
+        synchronized(syncLock) {
+            if(jpaState == CURRENT) {
+                jpaState = DIRTY;
+                HibernateUtil.addToDirtyList(this);
+            }
+        }
+    }
+
+    public @Transient void setJpaState(@NotNull JpaState jpaState) {
+        synchronized(syncLock) { this.jpaState = jpaState; }
+    }
+
+    protected @Transient void fireUpdatedEvent() {
+        JpaUpdateEvent event = new JpaUpdateEvent(this);
+        updateEventListeners.forEach(JpaUpdateListener.class, l -> l.entityUpdated(event));
+    }
+
+    protected @Transient @NotNull Stream<JpaBase> getManyToOneStream() {
+        return getFields(getClass()).filter(JpaBase::isChildField).map(f -> (JpaBase)Reflection.getFieldValue(f, this)).filter(Objects::nonNull);
     }
 
     protected void setField(@NotNull String name, @Nullable Object value) {
@@ -117,43 +147,35 @@ public class JpaBase {
         }
     }
 
-    public @Transient void saveChanges() {
-        saveChanges(true);
+    private void postSave(@NotNull Session session) {
+        session.flush();
+        session.refresh(this);
+        jpaState = CURRENT;
+        postSave();
     }
 
-    public @Transient void saveChanges(@NotNull Session session, boolean deep) {
-        if(deep) getManyToOneStream().forEach(c -> c.saveChanges(session, true));
-        if(jpaState != CURRENT) {
-            switch(jpaState) {
-                case DIRTY:
-                    session.merge(this);
-                    session.refresh(this);
-                    break;
-                case NEW:
-                    session.persist(this);
-                    session.refresh(this);
-                    break;
-            }
-
-            jpaState = CURRENT;
-            fireUpdatedEvent();
-        }
+    private void postSave() {
+        HibernateUtil.removeFromDirtyList(this);
+        fireUpdatedEvent();
     }
 
-    public @Transient void setAsDirty() {
-        if(jpaState == CURRENT) jpaState = DIRTY;
+    private void saveDeleted(@NotNull Session session) {
+        session.remove(this);
+        session.flush();
+        postSave();
     }
 
-    public @Transient void setJpaState(@NotNull JpaState jpaState) {
-        this.jpaState = jpaState;
+    private void saveDirty(@NotNull Session session) {
+        session.merge(this);
+        postSave(session);
     }
 
-    protected @Transient void fireUpdatedEvent() {
-        JpaUpdateEvent event = new JpaUpdateEvent(this);
-        updateEventListeners.forEach(JpaUpdateListener.class, l -> l.entityUpdated(event));
+    private void saveNew(@NotNull Session session) {
+        session.persist(this);
+        postSave(session);
     }
 
     private static boolean isChildField(@NotNull Field f) {
-        return (f.isAnnotationPresent(ManyToOne.class) && JpaBase.class.isAssignableFrom(f.getType()));
+        return (Reflection.hasAnyAnnotation(f, ManyToOne.class, OneToOne.class, OneToMany.class, ManyToMany.class) && JpaBase.class.isAssignableFrom(f.getType()));
     }
 }
