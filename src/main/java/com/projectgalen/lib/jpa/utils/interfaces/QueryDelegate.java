@@ -22,10 +22,9 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.base.JpaBase;
-import org.hibernate.query.Query;
+import jakarta.persistence.TypedQuery;
 import org.jetbrains.annotations.NotNull;
 
-public interface QueryDelegate<E extends JpaBase, R> {
-    R getWithQuery(@NotNull Query<E> query);
+public interface QueryDelegate<E, R> {
+    R getWithQuery(@NotNull TypedQuery<E> query);
 }

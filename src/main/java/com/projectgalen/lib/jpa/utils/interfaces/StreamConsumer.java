@@ -22,12 +22,11 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.stream.Stream;
 
-public interface StreamConsumer<E extends JpaBase, R> {
+public interface StreamConsumer<E, R> {
     R getWithStream(@NotNull Session session, @NotNull Stream<E> stream);
 }
