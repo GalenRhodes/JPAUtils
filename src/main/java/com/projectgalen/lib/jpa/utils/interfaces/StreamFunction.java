@@ -2,7 +2,7 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: QueryBuilderHandler.java
+//    FILENAME: StreamConsumer.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
 //        DATE: June 29, 2023
@@ -22,10 +22,11 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
-import org.jetbrains.annotations.NotNull;
+import org.hibernate.Session;
 
-import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.stream.Stream;
 
-public interface QueryBuilderHandler<R> {
-    R withBuiltQuery(@NotNull String query, @NotNull Map<String, Object> params);
+public interface StreamFunction<E, R> extends BiFunction<Session, Stream<E>, R> {
+    @Override R apply(Session session, Stream<E> eStream);
 }

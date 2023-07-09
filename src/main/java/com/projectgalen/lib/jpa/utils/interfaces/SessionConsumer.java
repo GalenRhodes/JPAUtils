@@ -2,7 +2,7 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: SessionConsumer.java
+//    FILENAME: SessionExecutable.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
 //        DATE: June 29, 2023
@@ -25,6 +25,13 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
-public interface SessionConsumer<R> {
-    R getWithSession(@NotNull Session session);
+import java.util.function.Consumer;
+
+public interface SessionConsumer extends SessionFunction<Object>, Consumer<Session> {
+    @Override void accept(@NotNull Session session);
+
+    @Override default Object apply(@NotNull Session session) {
+        accept(session);
+        return null;
+    }
 }

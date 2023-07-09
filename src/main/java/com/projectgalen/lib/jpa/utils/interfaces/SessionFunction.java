@@ -2,7 +2,7 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: VoidStreamConsumer.java
+//    FILENAME: SessionConsumer.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
 //        DATE: June 29, 2023
@@ -25,13 +25,8 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.stream.Stream;
+import java.util.function.Function;
 
-public interface VoidStreamConsumer<E> extends StreamConsumer<E, Object> {
-    void doWithStream(@NotNull Session session, @NotNull Stream<E> stream);
-
-    default Object getWithStream(@NotNull Session session, @NotNull Stream<E> stream) {
-        doWithStream(session, stream);
-        return null;
-    }
+public interface SessionFunction<R> extends Function<Session, R> {
+    @Override R apply(@NotNull Session session);
 }

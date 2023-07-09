@@ -33,23 +33,25 @@ import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.projectgalen.lib.jpa.utils.base.Utils.*;
 import static com.projectgalen.lib.jpa.utils.enums.JpaState.*;
+import static com.projectgalen.lib.utils.reflection.Reflection.getFieldValue;
 import static com.projectgalen.lib.utils.reflection.Reflection2.getAnnotatedFields;
-import static com.projectgalen.lib.utils.reflection.Reflection2.getFields;
 
-@SuppressWarnings({ "unused", "unchecked", "SameParameterValue" })
+@SuppressWarnings({ "unused", "unchecked", "SameParameterValue", "UnusedReturnValue" })
 public class JpaBase<E> {
 
     protected final @Transient EventListeners updateEventListeners = new EventListeners();
     protected final @Transient String         syncLock             = UUID.randomUUID().toString();
 
-    private @Transient JpaState jpaState;
+    @Transient JpaState jpaState;
 
     public JpaBase() {
         jpaState = CURRENT;
@@ -57,19 +59,26 @@ public class JpaBase<E> {
 
     public JpaBase(boolean dummy) {
         jpaState = NEW;
-        HibernateUtil.addToDirtyList(this);
+        Utils.doLocked(() -> addToDirtyList(this));
     }
 
     public @Transient void addUpdateListener(@NotNull JpaUpdateListener listener) {
-        synchronized(syncLock) { updateEventListeners.add(JpaUpdateListener.class, listener); }
+        updateEventListeners.add(JpaUpdateListener.class, listener);
     }
 
     public @Transient E delete() {
         synchronized(syncLock) {
-            jpaState = DELETED;
-            HibernateUtil.addToDirtyList(this);
+            Utils.doLocked(() -> {
+                if(jpaState == NEW) removeFromDirtyList(this);
+                else if(jpaState == CURRENT) addToDirtyList(this);
+                jpaState = DELETED;
+            });
             return (E)this;
         }
+    }
+
+    public @Transient E getCachedVersion() {
+        return Utils.locked(() -> Utils.replaceWithCached(this));
     }
 
     public @Transient @NotNull JpaState getJpaState() {
@@ -77,8 +86,7 @@ public class JpaBase<E> {
     }
 
     public @Transient @NotNull String getPKey() {
-        StringBuilder sb = new StringBuilder().append(getClass().getSimpleName()).append('[');
-        return sb.append(getIdFields().map(f -> Objects.toString(Reflection.getFieldValue(f, this), HibernateUtil.NULL_PK_TAG)).collect(Collectors.joining("]["))).append(']').toString();
+        return getClass().getSimpleName() + getIdFields().map(f -> Objects.toString(getFieldValue(f, this), NULL_PK_TAG)).collect(Collectors.joining("][", "[", "]"));
     }
 
     public @Transient boolean isCurrent() {
@@ -90,6 +98,10 @@ public class JpaBase<E> {
     }
 
     public @Transient boolean isDirty() {
+        synchronized(syncLock) { return (jpaState == DIRTY); }
+    }
+
+    public @Transient boolean isDirtyOrNew() {
         synchronized(syncLock) { return ((jpaState == DIRTY) || (jpaState == NEW)); }
     }
 
@@ -98,7 +110,7 @@ public class JpaBase<E> {
     }
 
     public @Transient void removeUpdateListener(@NotNull JpaUpdateListener listener) {
-        synchronized(syncLock) { updateEventListeners.remove(JpaUpdateListener.class, listener); }
+        updateEventListeners.remove(JpaUpdateListener.class, listener);
     }
 
     public @Transient E saveChanges(boolean deep) {
@@ -114,58 +126,29 @@ public class JpaBase<E> {
     }
 
     public @Transient E saveChanges(@NotNull Session session, boolean deep) {
-        if(deep) getManyToOneStream().forEach(c -> c.saveChanges(session, true));
+        if(deep) getManyToOneStream().forEach(e -> e.saveChanges(session, true));
         synchronized(syncLock) {
-            switch(jpaState) {
-                case NEW:
-                    session.persist(this);
+            if(jpaState != CURRENT) {
+                Utils.doLocked(() -> {
+                    JpaState oldState = jpaState;
+
+                    switch(jpaState) {/*@f0*/
+                        case NEW:     session.persist(this); jpaState = CURRENT;    break;
+                        case DIRTY:   session.merge(this);   jpaState = CURRENT;    break;
+                        case DELETED: session.remove(this);  removeFromCache(this); break;
+                    }/*@f1*/
+
+                    removeFromDirtyList(this);
                     session.flush();
-                    session.refresh(this);
-                    jpaState = CURRENT;
-                    HibernateUtil.addToCache(this);
-                    break;
-                case DIRTY:
-                    session.merge(this);
-                    session.flush();
-                    session.refresh(this);
-                    jpaState = CURRENT;
-                    break;
-                case DELETED:
-                    String pkey = getPKey();
-                    session.remove(this);
-                    session.flush();
-                    break;
+
+                    if(oldState != DELETED) session.refresh(this);
+                    if(oldState == NEW) addToCache(this);
+
+                    fireUpdatedEvent();
+                });
             }
-            fireUpdatedEvent();
-            HibernateUtil.removeFromDirtyList(this);
         }
         return (E)this;
-    }
-
-    protected @Transient void _saveChanges(@NotNull Session session) {
-        synchronized(syncLock) {
-            switch(jpaState) {
-                case NEW:
-                    session.persist(this);
-                    jpaState = CURRENT;
-                    break;
-                case DIRTY:
-                    session.merge(this);
-                    jpaState = CURRENT;
-                    break;
-                case DELETED:
-                    session.remove(this);
-                    break;
-            }
-        }
-    }
-
-    protected @Transient @NotNull Stream<Field> getIdFields() {
-        return getAnnotatedFields(getClass(), Id.class);
-    }
-
-    protected @Transient @NotNull Stream<? extends JpaBase<?>> getManyToOneStream() {
-        return getFields(getClass()).filter(HibernateUtil::isChildField).map(f -> (JpaBase<?>)Reflection.getFieldValue(f, this)).filter(Objects::nonNull);
     }
 
     protected @Transient void fireUpdatedEvent() {
@@ -173,24 +156,30 @@ public class JpaBase<E> {
         updateEventListeners.forEach(JpaUpdateListener.class, l -> l.entityUpdated(event));
     }
 
-    protected @Transient void setAsDirty() {
-        synchronized(syncLock) {
-            if(jpaState == CURRENT) {
-                jpaState = DIRTY;
-                HibernateUtil.addToDirtyList(this);
-            }
-        }
+    protected @Transient @NotNull Stream<Field> getIdFields() {
+        return getAnnotatedFields(getClass(), Id.class);
+    }
+
+    protected @Transient @NotNull Stream<? extends JpaBase<?>> getManyToOneStream() {
+        return getAnnotatedFields(getClass(), ManyToOne.class, OneToOne.class).filter(f -> JpaBase.class.isAssignableFrom(f.getType()))
+                                                                              .map(f -> (JpaBase<?>)getFieldValue(f, this))
+                                                                              .filter(Objects::nonNull);
     }
 
     protected @Transient void setField(@NotNull String name, @Nullable Object value) {
-        Field fld = getAnnotatedFields(getClass(), Column.class, ManyToOne.class, OneToOne.class).filter(f -> f.getName().equals(name)).findFirst().orElse(null);
-        if((fld != null) && !Objects.equals(Reflection.getFieldValue(fld, this), value)) {
-            Reflection.setFieldValue(fld, this, value);
-            setAsDirty();
-        }
+        setField(name, value, Column.class, ManyToOne.class, OneToOne.class);
     }
 
-    protected @Transient void setJpaState(@NotNull JpaState jpaState) {
-        synchronized(syncLock) { this.jpaState = jpaState; }
+    protected @Transient void setField(@NotNull String name, @Nullable Object value, Class<? extends Annotation> @NotNull ... types) {
+        synchronized(syncLock) {
+            Field fld = getAnnotatedFields(getClass(), types).filter(f -> f.getName().equals(name)).findFirst().orElse(null);
+            if((fld != null) && !Objects.equals(getFieldValue(fld, this), value)) {
+                Reflection.setFieldValue(fld, this, value);
+                if(jpaState == CURRENT) {
+                    jpaState = DIRTY;
+                    Utils.doLocked(() -> addToDirtyList(this));
+                }
+            }
+        }
     }
 }

@@ -2,7 +2,7 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: StreamConsumer.java
+//    FILENAME: VoidStreamConsumer.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
 //        DATE: June 29, 2023
@@ -25,8 +25,14 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
-public interface StreamConsumer<E, R> {
-    R getWithStream(@NotNull Session session, @NotNull Stream<E> stream);
+public interface StreamConsumer<E> extends StreamFunction<E, Object>, BiConsumer<Session, Stream<E>> {
+    @Override void accept(@NotNull Session session, @NotNull Stream<E> stream);
+
+    @Override default Object apply(@NotNull Session session, @NotNull Stream<E> stream) {
+        accept(session, stream);
+        return null;
+    }
 }

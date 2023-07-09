@@ -2,10 +2,10 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: QueryDelegate.java
+//    FILENAME: QueryConsumer.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
-//        DATE: June 29, 2023
+//        DATE: July 06, 2023
 //
 // Copyright © 2023 Project Galen. All rights reserved.
 //
@@ -23,8 +23,16 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // ===========================================================================
 
 import jakarta.persistence.TypedQuery;
+import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
-public interface QueryDelegate<E, R> {
-    R getWithQuery(@NotNull TypedQuery<E> query);
+import java.util.function.BiConsumer;
+
+public interface QueryConsumer<E> extends QueryFunction<E, Object>, BiConsumer<Session, TypedQuery<E>> {
+    @Override void accept(@NotNull Session session, @NotNull TypedQuery<E> query);
+
+    @Override default Object apply(@NotNull Session session, @NotNull TypedQuery<E> query) {
+        accept(session, query);
+        return null;
+    }
 }

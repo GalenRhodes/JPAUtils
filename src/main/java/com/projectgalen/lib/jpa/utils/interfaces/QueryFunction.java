@@ -2,7 +2,7 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 
 // ===========================================================================
 //     PROJECT: JPAUtils
-//    FILENAME: SessionExecutable.java
+//    FILENAME: QueryDelegate.java
 //         IDE: IntelliJ IDEA
 //      AUTHOR: Galen Rhodes
 //        DATE: June 29, 2023
@@ -22,14 +22,12 @@ package com.projectgalen.lib.jpa.utils.interfaces;
 // IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ===========================================================================
 
+import jakarta.persistence.TypedQuery;
 import org.hibernate.Session;
 import org.jetbrains.annotations.NotNull;
 
-public interface VoidSessionConsumer extends SessionConsumer<Object> {
-    void doWithSession(@NotNull Session session);
+import java.util.function.BiFunction;
 
-    default Object getWithSession(@NotNull Session session) {
-        doWithSession(session);
-        return null;
-    }
+public interface QueryFunction<E, R> extends BiFunction<Session, TypedQuery<E>, R> {
+    @Override R apply(@NotNull Session session, TypedQuery<E> eTypedQuery);
 }
