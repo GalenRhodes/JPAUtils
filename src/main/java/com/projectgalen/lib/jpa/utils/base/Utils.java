@@ -70,6 +70,14 @@ public class Utils {
 
     public Utils() { }
 
+    public static @NotNull String getFieldGetterName(@NotNull Field f) {
+        return String.format("get%s", U.capitalize(f.getName()));
+    }
+
+    public static boolean isJpaBaseField(@NotNull Field f) {
+        return JpaBase.class.isAssignableFrom(f.getType());
+    }
+
     public static <T> Optional<T> opt(@Nullable T val) {
         return Optional.ofNullable(val);
     }
@@ -201,7 +209,7 @@ public class Utils {
     }
 
     private static void saveNew(@NotNull Session session, @NotNull JpaBase<?> entity) {
-        entity.getManyToOneStream().filter(e -> (e.jpaState == NEW)).forEach(e -> saveNew(session, e));
+        entity.getToOneStream().filter(e -> (e.jpaState == NEW)).forEach(e -> saveNew(session, e));
         session.persist(entity);
         entity.jpaState = CURRENT;
     }
