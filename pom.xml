@@ -9,8 +9,10 @@
     <version>1.0.0</version>
 
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <intellij.version>232.8660.185</intellij.version>
+        <intellij.annotations.version>24.0.1</intellij.annotations.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <github.global.server>github</github.global.server>
@@ -20,7 +22,6 @@
         <project.build.resources.directory>${project.build.module.src.directory}/resources</project.build.resources.directory>
         <project.build.metainf.directory>${project.build.module.src.directory}/META-INF</project.build.metainf.directory>
         <project.build.jarclasses.directory>${project.build.directory}/jars-classes</project.build.jarclasses.directory>
-        <intellij.version>231.8109.175</intellij.version>
         <app.base.path>com/projectgalen/lib/jpa/utils</app.base.path>
         <app.base.package>com.projectgalen.lib.jpa.utils</app.base.package>
         <props2xml.jar.path>${project.basedir}/utils/PropertiesToXML-1.0.0.jar</props2xml.jar.path>
