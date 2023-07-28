@@ -68,15 +68,9 @@ public class JpaBase<E> {
         updateEventListeners.add(JpaUpdateListener.class, listener);
     }
 
-    public @Transient E delete() {
-        synchronized(syncLock) {
-            Utils.doLocked(() -> {/*@f0*/
-                if(jpaState == NEW) removeFromDirtyList(this); else if(jpaState == CURRENT) addToDirtyList(this);
-                jpaState = DELETED;
-            });/*@f1*/
-            return (E)this;
-        }
-    }
+    public @Transient E delete() {/*@f0*/
+        synchronized(syncLock) { Utils.doLocked(() -> { switch(jpaState) { case NEW -> removeFromDirtyList(this); case CURRENT -> addToDirtyList(this); } jpaState = DELETED; }); return (E)this; }
+    }/*@f1*/
 
     public @Transient E getCachedVersion() {
         synchronized(syncLock) { return Utils.locked(() -> (E)Utils.replaceWithCached(this)); }
@@ -138,9 +132,9 @@ public class JpaBase<E> {
                     JpaState oldState = jpaState;
 
                     switch(jpaState) {/*@f0*/
-                        case NEW:     session.persist(this); jpaState = CURRENT;    break;
-                        case DIRTY:   session.merge(this);   jpaState = CURRENT;    break;
-                        case DELETED: session.remove(this);  removeFromCache(this); break;
+                        case NEW     -> { session.persist(this); jpaState = CURRENT;    }
+                        case DIRTY   -> { session.merge(this);   jpaState = CURRENT;    }
+                        case DELETED -> { session.remove(this);  removeFromCache(this); }
                     }/*@f1*/
 
                     removeFromDirtyList(this);
