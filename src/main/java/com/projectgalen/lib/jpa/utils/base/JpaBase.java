@@ -192,9 +192,7 @@ public class JpaBase<E> {
     }
 
     private void setFieldValue(@NotNull Field fld, @Nullable Object newValue) {
-        Object currentValue = getPropertyValue(fld);
-
-        if(!Objects.equals(currentValue, newValue)) {
+        if(!Objects.equals(getPropertyValue(fld), newValue)) {
             Reflection.setFieldValue(fld, this, newValue);
             if(jpaState == CURRENT) {
                 jpaState = DIRTY;

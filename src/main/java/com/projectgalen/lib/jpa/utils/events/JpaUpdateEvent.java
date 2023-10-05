@@ -27,11 +27,11 @@ import com.projectgalen.lib.jpa.utils.base.JpaBase;
 import java.util.EventObject;
 
 public class JpaUpdateEvent extends EventObject {
-    public JpaUpdateEvent(JpaBase source) {
+    public JpaUpdateEvent(JpaBase<?> source) {
         super(source);
     }
 
-    @Override public JpaBase getSource() {
-        return (JpaBase)super.getSource();
+    public @Override JpaBase<?> getSource() {
+        return (JpaBase<?>)super.getSource();
     }
 }
