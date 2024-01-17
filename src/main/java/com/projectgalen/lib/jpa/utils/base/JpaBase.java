@@ -26,8 +26,7 @@ import com.projectgalen.lib.jpa.utils.HibernateUtil;
 import com.projectgalen.lib.jpa.utils.enums.JpaState;
 import com.projectgalen.lib.jpa.utils.events.JpaUpdateEvent;
 import com.projectgalen.lib.jpa.utils.events.JpaUpdateListener;
-import com.projectgalen.lib.utils.EventListeners;
-import com.projectgalen.lib.utils.U;
+import com.projectgalen.lib.utils.events.EventListeners;
 import com.projectgalen.lib.utils.reflection.Reflection;
 import jakarta.persistence.*;
 import org.hibernate.Session;
@@ -49,8 +48,8 @@ import static com.projectgalen.lib.utils.reflection.Reflection2.getMethods;
 @SuppressWarnings({ "unused", "unchecked", "SameParameterValue", "UnusedReturnValue", "RedundantCast" })
 public class JpaBase<E> {
 
-    protected final @Transient EventListeners                          updateEventListeners = new EventListeners();
-    protected final @Transient String                                  syncLock             = UUID.randomUUID().toString();
+    protected final @Transient EventListeners updateEventListeners = new EventListeners();
+    protected final @Transient String         syncLock             = UUID.randomUUID().toString();
     protected final @Transient Map<String, List<? extends JpaBase<?>>> cachedToManyMap      = new TreeMap<>();
 
     @Transient JpaState jpaState;
@@ -81,7 +80,9 @@ public class JpaBase<E> {
     }
 
     public @Transient @NotNull String getPKey() {
-        return U.concat(getClass().getSimpleName(), getFieldStream(Id.class).map(f -> Objects.toString(Reflection.getFieldValue(f, this), NULL_PK_TAG)).collect(Collectors.joining("][", "[", "]")));
+        return String.join("",
+                           getClass().getSimpleName(),
+                           getFieldStream(Id.class).map(f -> Objects.toString(Reflection.getFieldValue(f, this), NULL_PK_TAG)).collect(Collectors.joining("][", "[", "]")));
     }
 
     public @Transient boolean isCurrent() {

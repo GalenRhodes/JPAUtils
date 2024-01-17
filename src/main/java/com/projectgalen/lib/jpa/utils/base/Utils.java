@@ -28,8 +28,12 @@ import com.projectgalen.lib.jpa.utils.interfaces.QueryConsumer;
 import com.projectgalen.lib.jpa.utils.interfaces.QueryFunction;
 import com.projectgalen.lib.jpa.utils.interfaces.SessionConsumer;
 import com.projectgalen.lib.jpa.utils.interfaces.SessionFunction;
-import com.projectgalen.lib.utils.*;
+import com.projectgalen.lib.utils.PGResourceBundle;
 import com.projectgalen.lib.utils.concurrency.Locks;
+import com.projectgalen.lib.utils.helpers.Null;
+import com.projectgalen.lib.utils.helpers.U;
+import com.projectgalen.lib.utils.streams.Streams;
+import com.projectgalen.lib.utils.text.Text;
 import jakarta.persistence.Id;
 import jakarta.persistence.TypedQuery;
 import org.hibernate.Hibernate;
@@ -71,7 +75,7 @@ public class Utils {
     public Utils() { }
 
     public static @NotNull String getFieldGetterName(@NotNull Field f) {
-        return String.format("get%s", U.capitalize(f.getName()));
+        return String.format("get%s", Text.capitalize(f.getName()));
     }
 
     public static boolean isJpaBaseField(@NotNull Field f) {
